@@ -1,0 +1,11 @@
+# Sync the keyboard clock. Install:
+#   cp rt85-clock-sync.{service,timer} ~/.config/systemd/user/
+#   systemctl --user enable --now rt85-clock-sync.timer
+[Unit]
+Description=Sync the Epomaker RT85 clock
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/rt85 time
+# Flatpak install instead:
+# ExecStart=/usr/bin/flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager time

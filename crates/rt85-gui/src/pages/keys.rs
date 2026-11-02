@@ -55,6 +55,19 @@ impl Page {
         }
     }
 
+    /// Demo mode: a rainbow across the board and one remap.
+    pub fn seed_demo(&mut self) {
+        let width = self.layout.size().0.max(1.0);
+        for k in &self.layout.keys {
+            let h = (k.x / width) * 300.0;
+            self.colors.insert(k.index, hsv(h));
+        }
+        if let Some(caps) = self.layout.key("CAPS") {
+            self.remaps.insert(caps.index, 0xE0);
+        }
+        self.selected = self.layout.keys.iter().filter(|k| k.y < 1.0).map(|k| k.index).collect();
+    }
+
     pub fn update(&mut self, msg: Message) -> Output<Message> {
         match msg {
             Message::Tab(t) => {
@@ -186,4 +199,17 @@ impl Page {
 
 fn tab_button<'a>(label: String, active: bool, msg: Message) -> Element<'a, Message> {
     if active { widget::button::suggested(label).into() } else { widget::button::standard(label).on_press(msg).into() }
+}
+
+fn hsv(h: f32) -> color::Rgb {
+    let x = 1.0 - ((h / 60.0) % 2.0 - 1.0).abs();
+    let (r, g, b) = match (h / 60.0) as u32 {
+        0 => (1.0, x, 0.0),
+        1 => (x, 1.0, 0.0),
+        2 => (0.0, 1.0, x),
+        3 => (0.0, x, 1.0),
+        4 => (x, 0.0, 1.0),
+        _ => (1.0, 0.0, x),
+    };
+    ((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
 }

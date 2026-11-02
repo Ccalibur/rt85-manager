@@ -34,6 +34,8 @@ pub enum Message {
     Progress(usize, usize),
     JobDone(Result<String, String>),
     HotplugTick,
+    TakeScreenshot,
+    Screenshot(u32, u32, Arc<Vec<u8>>),
     TelemetryTick,
     DismissStatus,
 }
@@ -53,6 +55,7 @@ pub struct App {
     keys: pages::keys::Page,
     screen: pages::screen::Page,
     cpu: CpuSampler,
+    demo: bool,
 }
 
 impl App {
@@ -61,6 +64,9 @@ impl App {
     }
 
     fn scan(&mut self) -> Task<Message> {
+        if self.demo {
+            return Task::none();
+        }
         if self.scanning || self.busy.is_some() {
             return Task::none();
         }
@@ -77,6 +83,9 @@ impl App {
 
     /// Run a job on the worker; progress and the result come back as messages.
     fn run(&mut self, job: Job, label: Option<String>) -> Task<Message> {
+        if self.demo {
+            return cosmic::task::message(Message::JobDone(Ok(format!("Demo mode: {} (nothing sent)", job.describe()))));
+        }
         let quiet = label.is_none();
         if !quiet {
             self.busy = label;
@@ -164,10 +173,27 @@ impl Application for App {
             keys: pages::keys::Page::new(),
             screen: pages::screen::Page::new(),
             cpu: CpuSampler::default(),
+            demo: crate::demo::enabled(),
         };
-        let title = app.update_title();
-        let scan = app.scan();
-        (app, Task::batch([title, scan]))
+        let mut tasks = vec![app.update_title(), app.scan()];
+        if app.demo {
+            app.devices = vec![crate::demo::device()];
+            app.active = Some(0);
+            app.keys.seed_demo();
+            app.lighting.seed_demo();
+            let out = app.screen.on_caps_changed(app.caps().screen);
+            tasks.push(app.handle(out, Message::Screen));
+            if let Some(p) = crate::demo::image_path() {
+                tasks.push(cosmic::task::message(Message::Screen(pages::screen::Message::Picked(p))));
+            }
+        }
+        if crate::demo::screenshot_path().is_some() {
+            tasks.push(cosmic::task::future(async {
+                tokio::time::sleep(Duration::from_millis(2500)).await;
+                Message::TakeScreenshot
+            }));
+        }
+        (app, Task::batch(tasks))
     }
 
     fn nav_model(&self) -> Option<&nav_bar::Model> {
@@ -243,6 +269,21 @@ impl Application for App {
                 return Task::batch(tasks);
             }
             Message::DismissStatus => self.status = None,
+            Message::TakeScreenshot => {
+                if let Some(id) = self.core.main_window_id() {
+                    return cosmic::iced::window::screenshot(id).map(|s| {
+                        cosmic::Action::App(Message::Screenshot(s.size.width, s.size.height, Arc::new(s.rgba.to_vec())))
+                    });
+                }
+            }
+            Message::Screenshot(w, h, rgba) => {
+                if let Some(path) = crate::demo::screenshot_path()
+                    && let Err(e) = image::save_buffer(&path, &rgba, w, h, image::ExtendedColorType::Rgba8)
+                {
+                    tracing::error!("saving screenshot: {e}");
+                }
+                return cosmic::iced::exit();
+            }
         }
         Task::none()
     }

@@ -1,0 +1,15 @@
+# Keep the CPU/temperature widgets updated. Install:
+#   cp ../host-monitor.sh ~/.local/bin/rt85-host-monitor
+#   cp rt85-host-monitor.service ~/.config/systemd/user/
+#   systemctl --user enable --now rt85-host-monitor.service
+[Unit]
+Description=Show CPU usage and temperature on the Epomaker RT85 screen
+
+[Service]
+ExecStart=%h/.local/bin/rt85-host-monitor
+Environment=RT85=%h/.local/bin/rt85
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

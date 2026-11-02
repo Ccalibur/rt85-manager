@@ -42,6 +42,24 @@
     <control>pointing</control>
     <control>keyboard</control>
   </supports>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Lighting effects</caption>
+      <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/lighting.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Per-key colours on a clickable layout</caption>
+      <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/keys.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Screen image upload and widgets</caption>
+      <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/screen.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Connected keyboard details</caption>
+      <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/device.png</image>
+    </screenshot>
+  </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
     <release version="0.1.0" date="2026-11-02">

@@ -36,6 +36,24 @@ pub enum Job {
     Temperature(u8),
 }
 
+impl Job {
+    pub fn describe(&self) -> String {
+        match self {
+            Job::Profile(p) => format!("set lighting to {}", p.mode.label()),
+            Job::KeyColors(_) => "send key colours".into(),
+            Job::Remap { index, code } => {
+                format!("remap key {index} to {}", rt85_protocol::keycode::name(*code).unwrap_or("?"))
+            }
+            Job::Upload(a) => format!("upload {} frame(s)", a.frames.len()),
+            Job::Qgif(_) => "upload QGIF".into(),
+            Job::ClearScreen => "clear the screen".into(),
+            Job::SyncTime => "sync the clock".into(),
+            Job::Cpu(v) => format!("show CPU {v}%"),
+            Job::Temperature(v) => format!("show {v} °C"),
+        }
+    }
+}
+
 pub struct Worker {
     api: Option<HidApi>,
     found: Vec<FoundDevice>,

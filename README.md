@@ -1,65 +1,124 @@
-# RT85 Manager
+<p align="center">
+  <img src="resources/icons/hicolor/scalable/apps/io.github.Ccalibur.Rt85Manager.svg" width="96" alt="">
+</p>
 
-A COSMIC (libcosmic) desktop app and CLI for configuring the Epomaker RT85 on
-Linux: lighting effects, per-key colours, key remapping, and the built-in
-screen (image/GIF upload, clock sync, CPU/temperature widgets).
+<h1 align="center">RT85 Manager</h1>
 
-> **Status:** the protocol code is ported from two reverse-engineered projects
-> for sibling boards (see `docs/protocol.md`). It hasn't been tested on an
-> RT85 yet. Start with `rt85 list`.
+<p align="center">
+  Configure the <b>Epomaker RT85</b> keyboard on Linux: lighting, per-key colours,
+  key remapping and the built-in screen.<br>
+  A native <a href="https://github.com/pop-os/libcosmic">COSMIC</a> app plus the <code>rt85</code> command-line tool.
+</p>
+
+> [!WARNING]
+> **Experimental.** The keyboard protocol is ported from reverse-engineered work on
+> sibling boards (RT100 and RT82, see [`docs/protocol.md`](docs/protocol.md)), and it
+> hasn't been tested on an RT85 yet. If you own one, please open an issue with the
+> output of `rt85 list --all`.
+
+## Screenshots
+
+<sub>Taken in demo mode (`RT85_DEMO=1`), which simulates a connected keyboard.</sub>
+
+| Lighting | Per-key colours |
+|---|---|
+| ![Lighting page: effect mode, speed, brightness, direction and colour](docs/screenshots/lighting.png) | ![Keys page: clickable keyboard with a rainbow of per-key colours](docs/screenshots/keys.png) |
+| **Screen** | **Device** |
+| ![Screen page: image preview, upload, clock and CPU/temperature widgets](docs/screenshots/screen.png) | ![Device page: connected keyboard, platform and capabilities](docs/screenshots/device.png) |
+
+## Features
+
+- **Lighting:** 19 built-in effects with speed, brightness, direction, colour and rainbow mode
+- **Per-key RGB:** paint keys on a clickable layout and send them to the keyboard
+- **Key remapping:** pick a key and choose what it sends
+- **Screen:** upload images and animated GIFs (fill, fit or stretch), clear the screen
+- **Screen widgets:** sync the clock, stream live CPU usage and temperature
+- **CLI:** everything above, scriptable, plus raw packets for protocol probing
 
 ## Install
 
-Grab a package from [Releases](https://github.com/Ccalibur/rt85-manager/releases).
-They're built against glibc 2.40, so they run on **Fedora 41+**, **Arch** and
-other distros at least that new.
+Download a package from [Releases](https://github.com/Ccalibur/rt85-manager/releases).
+The binaries need glibc 2.39 or newer, so they run on **Arch**, **Fedora 40+** and
+other current distros (x86_64).
 
-| Package | How |
+| Package | Install and run |
 |---|---|
-| **AppImage** | `chmod +x RT85_Manager-*.AppImage && ./RT85_Manager-*.AppImage` (CLI: `./RT85_Manager-*.AppImage --cli list`) |
-| **Flatpak** | `flatpak install --user ./RT85_Manager-*.flatpak`, then `flatpak run io.github.Ccalibur.Rt85Manager` (CLI: `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager list`) |
-| **Tarball** | `sudo tar -xzf rt85-manager-*.tar.gz -C /usr/local --strip-components=1` |
+| **Flatpak** | `flatpak install --user ./RT85_Manager-*.flatpak`<br>`flatpak run io.github.Ccalibur.Rt85Manager` |
+| **Tarball** | `sudo tar -xzf rt85-manager-*.tar.gz -C /usr/local --strip-components=1`<br>`rt85-manager` |
+| **AppImage** | `chmod +x RT85_Manager-*.AppImage && ./RT85_Manager-*.AppImage`<br>CLI: `./RT85_Manager-*.AppImage --cli list` |
 
-Whichever you pick, also install the udev rule below. Without it, only root can
-talk to the keyboard. A sandboxed app can't install it for you.
+### Required: udev rule
 
-## Layout
+Without it, only root can talk to the keyboard. Packages can't install it for you:
+
+```sh
+sudo install -Dm644 resources/udev/70-epomaker-rt85.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger   # then replug the keyboard
+```
+
+## Command-line examples
+
+```console
+$ rt85 list                                   # connected keyboards and their HID interfaces
+$ rt85 list --all                             # every HID device (to find an unrecognised RT85)
+
+$ rt85 modes                                  # list lighting effects
+$ rt85 lighting --mode breathing --speed 3 --color 2bd4c4
+$ rt85 lighting --mode spectrum-cycle --dazzle
+$ rt85 color ff6a00                           # every key the same colour
+
+$ rt85 remap CAPS "Left Ctrl"                 # Caps Lock becomes Ctrl
+$ rt85 keys                                   # key names and indices
+
+$ rt85 upload wallpaper.png --fit contain     # still image
+$ rt85 upload cat.gif                         # animation (up to 56 frames)
+$ rt85 clear
+$ rt85 time                                   # sync the clock
+$ rt85 cpu 42 && rt85 temp 55                 # set the widgets by hand
+```
+
+With the Flatpak, use `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager …`.
+With the AppImage, use `./RT85_Manager-*.AppImage --cli …`.
+
+Ready-made scripts are in [`examples/`](examples): lighting presets, a screen
+slideshow, a CPU/temperature monitor, and systemd user units for hourly clock sync.
+
+## Building from source
+
+Needs Rust 1.93+, `libudev` and `libxkbcommon` headers (Arch: `systemd-libs libxkbcommon`;
+Fedora: `systemd-devel libxkbcommon-devel`).
+
+```sh
+just run                 # GUI
+just cli list            # CLI
+just test                # unit tests (packets checked against captured traffic)
+just dist                # release packages into dist/ (AppImage, .flatpak, tarball)
+```
+
+`just dist` compiles inside the Freedesktop 24.08 SDK so the binaries don't depend on
+your machine's (possibly newer) glibc. See [`packaging/`](packaging).
+
+Handy environment variables: `RUST_LOG=rt85=trace` (protocol logging),
+`RT85_DEMO=1` (explore the UI without a keyboard), `RT85_PAGE=0..3` (start on a page).
+
+### Project layout
 ```
 crates/
   rt85-protocol/   packet builders + parsers, no I/O (unit-tested against captures)
   rt85-device/     hidapi discovery, transports, image/GIF loading
   rt85-cli/        `rt85` command-line tool
   rt85-gui/        `rt85-manager` libcosmic app
+examples/          scripts and systemd units built on the CLI
+packaging/         AppImage, Flatpak and tarball builds
 resources/         .desktop, metainfo, icon, udev rule
-docs/protocol.md   protocol notes
-```
-
-## Build & run
-```sh
-just run                 # GUI
-just cli list            # what's connected
-just cli list --all      # every HID device (find an unknown RT85)
-just cli lighting --mode breathing --color 00ffaa
-just cli upload cat.gif
-just test
-```
-Debug logging: `RUST_LOG=rt85=trace`. Open the GUI on a given page with `RT85_PAGE=0..3`.
-
-## Building the release packages
-```sh
-just dist        # dist/: AppImage, .flatpak, tarball, SHA256SUMS
-```
-Binaries are compiled in the Freedesktop 24.08 SDK (via `flatpak run`) so they don't
-pick up the build machine's newer glibc. See `packaging/`.
-
-## Permissions
-```sh
-sudo install -Dm644 resources/udev/70-epomaker-rt85.rules /etc/udev/rules.d/
-sudo udevadm control --reload && sudo udevadm trigger   # then replug
+docs/              protocol notes and screenshots
 ```
 
 ## Credits
+
 Protocol details come from
 [strodgers/epomaker-controller](https://github.com/strodgers/epomaker-controller) (MIT;
 the bundled RT100 layout JSON is from there) and
 [guysoft/rt82display](https://github.com/guysoft/rt82display) (GPL-3.0).
+
+Licensed under [GPL-3.0](LICENSE).

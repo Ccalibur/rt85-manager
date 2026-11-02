@@ -1,0 +1,9 @@
+[Unit]
+Description=Sync the Epomaker RT85 clock at login and every hour
+
+[Timer]
+OnStartupSec=30s
+OnUnitActiveSec=1h
+
+[Install]
+WantedBy=timers.target

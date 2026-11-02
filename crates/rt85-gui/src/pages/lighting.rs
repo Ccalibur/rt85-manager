@@ -32,6 +32,13 @@ impl Page {
         }
     }
 
+    /// Demo mode: a livelier starting point than plain white.
+    pub fn seed_demo(&mut self) {
+        self.profile.mode = Mode::Breathing;
+        self.profile.speed = 3;
+        self.update(Message::Color(color::Message::Preset((43, 212, 196))));
+    }
+
     pub fn update(&mut self, msg: Message) -> Output<Message> {
         match msg {
             Message::Mode(i) => self.profile.mode = Mode::ALL[i],
