@@ -1,0 +1,27 @@
+[package]
+name = "rt85-gui"
+description = "COSMIC application for managing the Epomaker RT85 keyboard."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rt85-manager"
+path = "src/main.rs"
+
+[dependencies]
+rt85-device.workspace = true
+rt85-protocol.workspace = true
+image.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+futures = "0.3"
+tokio = { version = "1", features = ["rt"] }
+i18n-embed = { version = "0.15", features = ["fluent-system", "desktop-requester"] }
+i18n-embed-fl = "0.9"
+rust-embed = "8"
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+default-features = false
+features = ["tokio", "winit", "wgpu", "wayland", "x11", "xdg-portal"]

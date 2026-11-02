@@ -1,0 +1,9 @@
+# Lets the logged-in user open Epomaker keyboard HID nodes (no sudo needed).
+# Install:  sudo install -Dm644 70-epomaker-rt85.rules /etc/udev/rules.d/
+#           sudo udevadm control --reload && sudo udevadm trigger   (then replug)
+#
+# Royuan platform (RT100 family; the RT85 may be one of these)
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", TAG+="uaccess"
+# RDMCTMZT platform (RT82 family) + its LCD sub-device
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="36b0", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1919", ATTRS{idProduct}=="1919", TAG+="uaccess"

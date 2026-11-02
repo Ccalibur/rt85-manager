@@ -1,0 +1,11 @@
+[package]
+name = "rt85-protocol"
+description = "Wire protocol (packet encode/decode) for the Epomaker RT85. No I/O."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json = "1"

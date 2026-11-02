@@ -1,0 +1,17 @@
+[package]
+name = "rt85-cli"
+description = "Command-line tool for testing the RT85 protocol."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "rt85"
+path = "src/main.rs"
+
+[dependencies]
+rt85-device.workspace = true
+rt85-protocol.workspace = true
+anyhow.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive"] }
