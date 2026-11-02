@@ -14,7 +14,7 @@ use futures::SinkExt;
 use rt85_device::Capabilities;
 use std::{sync::{Arc, Mutex}, time::Duration};
 
-pub const APP_ID: &str = "dev.rt85.Manager";
+pub const APP_ID: &str = "io.github.Ccalibur.Rt85Manager";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {

@@ -1,0 +1,10 @@
+#!/bin/sh
+# RT85 Manager AppImage entry point.
+#   ./RT85_Manager.AppImage            -> GUI
+#   ./RT85_Manager.AppImage --cli ...  -> `rt85` command-line tool
+HERE="$(dirname "$(readlink -f "$0")")"
+if [ "$1" = "--cli" ]; then
+    shift
+    exec "$HERE/usr/bin/rt85" "$@"
+fi
+exec "$HERE/usr/bin/rt85-manager" "$@"

@@ -1,0 +1,38 @@
+# Packages the binaries made by packaging/build-portable.sh (built in the
+# Freedesktop SDK, so they match this runtime's ABI).
+id: io.github.Ccalibur.Rt85Manager
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: rt85-manager
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # hidraw nodes for the keyboard (and the GPU)
+  - --device=all
+  # lets libudev enumerate the hidraw devices
+  - --filesystem=/run/udev:ro
+modules:
+  - name: rt85-manager
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 rt85-manager /app/bin/rt85-manager
+      - install -Dm755 rt85 /app/bin/rt85
+      - install -Dm644 io.github.Ccalibur.Rt85Manager.desktop /app/share/applications/io.github.Ccalibur.Rt85Manager.desktop
+      - install -Dm644 io.github.Ccalibur.Rt85Manager.metainfo.xml /app/share/metainfo/io.github.Ccalibur.Rt85Manager.metainfo.xml
+      - install -Dm644 io.github.Ccalibur.Rt85Manager.svg /app/share/icons/hicolor/scalable/apps/io.github.Ccalibur.Rt85Manager.svg
+      - install -Dm644 70-epomaker-rt85.rules /app/share/rt85-manager/70-epomaker-rt85.rules
+    sources:
+      - type: file
+        path: ../../target/portable/release/rt85-manager
+      - type: file
+        path: ../../target/portable/release/rt85
+      - type: file
+        path: ../../resources/io.github.Ccalibur.Rt85Manager.desktop
+      - type: file
+        path: ../../resources/io.github.Ccalibur.Rt85Manager.metainfo.xml
+      - type: file
+        path: ../../resources/icons/hicolor/scalable/apps/io.github.Ccalibur.Rt85Manager.svg
+      - type: file
+        path: ../../resources/udev/70-epomaker-rt85.rules

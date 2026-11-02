@@ -8,6 +8,21 @@ screen (image/GIF upload, clock sync, CPU/temperature widgets).
 > for sibling boards (see `docs/protocol.md`). It hasn't been tested on an
 > RT85 yet. Start with `rt85 list`.
 
+## Install
+
+Grab a package from [Releases](https://github.com/Ccalibur/rt85-manager/releases).
+They're built against glibc 2.40, so they run on **Fedora 41+**, **Arch** and
+other distros at least that new.
+
+| Package | How |
+|---|---|
+| **AppImage** | `chmod +x RT85_Manager-*.AppImage && ./RT85_Manager-*.AppImage` (CLI: `./RT85_Manager-*.AppImage --cli list`) |
+| **Flatpak** | `flatpak install --user ./RT85_Manager-*.flatpak`, then `flatpak run io.github.Ccalibur.Rt85Manager` (CLI: `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager list`) |
+| **Tarball** | `sudo tar -xzf rt85-manager-*.tar.gz -C /usr/local --strip-components=1` |
+
+Whichever you pick, also install the udev rule below. Without it, only root can
+talk to the keyboard. A sandboxed app can't install it for you.
+
 ## Layout
 ```
 crates/
@@ -29,6 +44,13 @@ just cli upload cat.gif
 just test
 ```
 Debug logging: `RUST_LOG=rt85=trace`. Open the GUI on a given page with `RT85_PAGE=0..3`.
+
+## Building the release packages
+```sh
+just dist        # dist/: AppImage, .flatpak, tarball, SHA256SUMS
+```
+Binaries are compiled in the Freedesktop 24.08 SDK (via `flatpak run`) so they don't
+pick up the build machine's newer glibc. See `packaging/`.
 
 ## Permissions
 ```sh

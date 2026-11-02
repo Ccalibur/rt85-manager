@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Ccalibur.Rt85Manager</id>
+  <name>RT85 Manager</name>
+  <summary>Configure the Epomaker RT85 keyboard</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="io.github.ccalibur">
+    <name>Ccalibur</name>
+  </developer>
+  <description>
+    <p>
+      RT85 Manager configures the Epomaker RT85 mechanical keyboard on Linux, with a
+      native COSMIC interface.
+    </p>
+    <ul>
+      <li>Built-in lighting effects: mode, speed, brightness, direction and colour</li>
+      <li>Per-key RGB colours on a clickable keyboard layout</li>
+      <li>Key remapping</li>
+      <li>Upload images and animated GIFs to the built-in screen</li>
+      <li>Clock sync and live CPU usage and temperature on the screen</li>
+    </ul>
+    <p>
+      The keyboard protocol is reverse-engineered and support is experimental.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.Ccalibur.Rt85Manager.desktop</launchable>
+  <url type="homepage">https://github.com/Ccalibur/rt85-manager</url>
+  <url type="bugtracker">https://github.com/Ccalibur/rt85-manager/issues</url>
+  <categories>
+    <category>Settings</category>
+    <category>HardwareSettings</category>
+  </categories>
+  <provides>
+    <binary>rt85-manager</binary>
+    <binary>rt85</binary>
+  </provides>
+  <requires>
+    <display_length compare="ge">640</display_length>
+  </requires>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-02">
+      <description>
+        <p>First release: lighting, per-key colours, remapping, screen upload and widgets.</p>
+      </description>
+    </release>
+  </releases>
+</component>

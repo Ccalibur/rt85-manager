@@ -1,5 +1,5 @@
 name := "rt85-manager"
-appid := "dev.rt85.Manager"
+appid := "io.github.Ccalibur.Rt85Manager"
 prefix := "/usr"
 
 default: build-release
@@ -12,6 +12,23 @@ run *args:
 
 cli *args:
     cargo run -p rt85-cli -- {{args}}
+
+# Release binaries built in the Freedesktop SDK (glibc 2.40, runs on Fedora 41+ and Arch)
+portable:
+    packaging/build-portable.sh
+
+appimage: portable
+    packaging/appimage/build.sh
+
+flatpak: portable
+    packaging/flatpak/build.sh
+
+# AppImage + Flatpak + tarball into dist/, plus checksums
+dist: portable
+    packaging/appimage/build.sh
+    packaging/flatpak/build.sh
+    packaging/tarball.sh
+    cd dist && sha256sum *.AppImage *.flatpak *.tar.gz > SHA256SUMS
 
 check:
     cargo clippy --workspace --all-targets -- -D warnings
