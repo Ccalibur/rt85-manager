@@ -51,6 +51,6 @@ pub fn device() -> DeviceSummary {
         manufacturer: "Demo mode, nothing is sent".into(),
         interfaces: vec!["#1 /dev/hidraw-demo [ff00:0001]".into()],
         hid_paths: Vec::new(),
-        caps: Capabilities::for_platform(Platform::Royuan),
+        caps: Capabilities::for_device(Platform::Royuan, rt85_protocol::layout::Board::Rt85),
     }
 }

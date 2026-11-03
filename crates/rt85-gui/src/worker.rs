@@ -184,6 +184,6 @@ fn summary(f: &FoundDevice) -> DeviceSummary {
             })
             .collect(),
         hid_paths: f.interfaces.iter().map(|i| i.path.to_string_lossy().into_owned()).collect(),
-        caps: Capabilities::for_platform(f.platform),
+        caps: Capabilities::for_device(f.platform, rt85_protocol::layout::Board::for_model(f.known.map(|k| k.model))),
     }
 }

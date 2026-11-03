@@ -29,8 +29,8 @@ struct Cli {
     /// RT85 Manager, else ansi.
     #[arg(long, global = true)]
     layout: Option<Physical>,
-    /// Key layout to use: rt85 (75%) or rt100. Defaults to the connected
-    /// keyboard's model, else rt85.
+    /// Board: rt85 (75%, 320x172 screen) or rt100. Picks the key layout and
+    /// screen size. Defaults to the connected keyboard's model, else rt85.
     #[arg(long, global = true)]
     board: Option<Board>,
     #[command(subcommand)]
@@ -156,8 +156,8 @@ fn main() -> Result<()> {
         None => Keyboard::open(&api, &found)?,
     };
     eprintln!("Using {} ({:04x}:{:04x}, {:?})", found.display_name(), found.vid, found.pid, found.platform);
-    let caps = kb.capabilities();
     let board = cli.board.unwrap_or_else(|| Board::for_model(found.known.map(|k| k.model)));
+    let caps = kb.capabilities(board);
 
     match cli.cmd {
         Cmd::Time => {

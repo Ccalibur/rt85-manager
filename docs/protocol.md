@@ -42,6 +42,25 @@ Image pixels: RGB565 **big-endian**, column-major (outer loop x, inner loop y).
 RT100 screen is 162 × 173, so one frame = 56052 bytes = 1001 reports. Animation
 frames must be 64-px aligned in both dimensions; the reference tool caps them at 56 frames.
 
+### RT85 full-screen stills (320 × 172)
+
+The RT85 is a Royuan board (wired `3151:5002`, dongle `3151:5006`) with a
+1.47" 320 × 172 panel. One frame is 110080 bytes, too big for the compact
+header, so Epomaker's driver (v4 3.2.22) extends it. The format below is
+decoded from that driver's USB capture, published by
+[keybored](https://github.com/MoniMoghrabi/keybored) (`recon/capture/fullscreen2.pcapng`):
+
+- Init: `a5 00 01 00 sizeLE16(low) 00 cs 00 00 w&ff h 00 00 w>>8 00 size>>16`,
+  i.e. `a5 00 01 00 00 ae 00 ab 00 00 40 ac 00 00 01 00 01` for 320 × 172.
+- 1966 data reports: `38` on every report except the final one, which is `28`.
+  Sending `34` at the end of an oversized stream blanks the screen.
+- About 5 ms between reports (the capture's median gap is 5.0 ms), so an
+  upload takes about 10 s. The firmware shows a progress bar during it.
+- Only single-frame stills have been seen in the extended form. Animations
+  keep the compact header, which limits them to 192 × 128 on the RT85.
+- keybored reports that the built-in CPU/memory/temperature widgets are
+  driven some other way on the RT85, so `22`/`2a` may do nothing there.
+
 ## RDMCTMZT (`0x36B0`)
 
 Packets start `AA cmd`. Keyboard raw-HID interface 1 (usage page `0xFF60`):
@@ -64,6 +83,7 @@ The screen takes **QGIF** (240 × 135). The real encoder is the vendor's WASM
 uploads pre-encoded `.qgif` files on this platform.
 
 ## Open questions for the RT85
-- Which platform? Screen resolution? Does the joystick have a remappable index?
+- Does the joystick have a remappable index?
+- How does the official driver upload full-screen GIFs (multi-frame extended header)?
 - Key index table (light keys one at a time with `rt85 probe-key N`).
 - Can the keymap be read back from the keyboard?

@@ -138,7 +138,7 @@ impl Page {
             return Output::None;
         }
         self.live.rendering = true;
-        let spec = self.spec.unwrap_or(rt85_protocol::royuan::screen::RT100_SCREEN);
+        let spec = self.spec.unwrap_or(rt85_protocol::royuan::screen::RT85_SCREEN);
         let mode = self.live.mode;
         let media = self.live.snap.media.clone().filter(|_| mode.media());
         let fps = self.live.snap.fps.clone().filter(|_| mode.fps());

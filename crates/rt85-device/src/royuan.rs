@@ -12,6 +12,9 @@ use tracing::{debug, trace};
 
 /// Minimum spacing between reports (the reference tool uses 1 ms).
 const MIN_GAP: Duration = Duration::from_millis(1);
+/// Spacing for full-screen image streams. Epomaker's driver sends them about
+/// 5 ms apart, and the RT85 drops reports when pushed much faster.
+const FULL_SCREEN_GAP: Duration = Duration::from_millis(5);
 
 pub struct RoyuanKeyboard {
     dev: HidDevice,
@@ -25,10 +28,14 @@ impl RoyuanKeyboard {
     }
 
     pub fn send(&mut self, report: &Report) -> Result<()> {
+        self.send_spaced(report, MIN_GAP)
+    }
+
+    fn send_spaced(&mut self, report: &Report, gap: Duration) -> Result<()> {
         if let Some(t) = self.last_send {
             let elapsed = t.elapsed();
-            if elapsed < MIN_GAP {
-                std::thread::sleep(MIN_GAP - elapsed);
+            if elapsed < gap {
+                std::thread::sleep(gap - elapsed);
             }
         }
         trace!(report = %hex(report), "feature report");
@@ -38,9 +45,13 @@ impl RoyuanKeyboard {
     }
 
     pub fn send_all(&mut self, reports: &[Report], progress: Progress) -> Result<()> {
+        self.send_all_spaced(reports, MIN_GAP, progress)
+    }
+
+    fn send_all_spaced(&mut self, reports: &[Report], gap: Duration, progress: Progress) -> Result<()> {
         let total = reports.len();
         for (i, r) in reports.iter().enumerate() {
-            self.send(r)?;
+            self.send_spaced(r, gap)?;
             progress(i + 1, total);
         }
         Ok(())
@@ -81,8 +92,9 @@ impl RoyuanKeyboard {
 
     pub fn upload(&mut self, anim: &Animation, progress: Progress) -> Result<()> {
         let reports = anim.reports()?;
-        debug!(frames = anim.frames.len(), w = anim.width, h = anim.height, reports = reports.len(), "uploading");
-        self.send_all(&reports, progress)
+        let gap = if anim.is_extended() { FULL_SCREEN_GAP } else { MIN_GAP };
+        debug!(frames = anim.frames.len(), w = anim.width, h = anim.height, reports = reports.len(), ?gap, "uploading");
+        self.send_all_spaced(&reports, gap, progress)
     }
 
     pub fn clear_screen(&mut self) -> Result<()> {

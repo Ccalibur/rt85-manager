@@ -7,7 +7,8 @@ use hidapi::HidApi;
 use rt85_protocol::{
     ids::{Link, Platform},
     rdmctmzt::Qgif,
-    royuan::{keys::RgbFrame, lighting::Profile, screen::{Animation, RT100_SCREEN, ScreenSpec}},
+    layout::Board,
+    royuan::{keys::RgbFrame, lighting::Profile, screen::{self, Animation, ScreenSpec}},
     time::DateTime,
 };
 
@@ -28,7 +29,9 @@ pub struct Capabilities {
 }
 
 impl Capabilities {
-    pub fn for_platform(platform: Platform) -> Self {
+    /// What a board can do. The screen size follows the board, since the
+    /// RT85 and some RT100 batches share a USB ID.
+    pub fn for_device(platform: Platform, board: Board) -> Self {
         match platform {
             Platform::Royuan => Capabilities {
                 lighting_modes: true,
@@ -39,8 +42,7 @@ impl Capabilities {
                 screen_rgb565: true,
                 screen_qgif: false,
                 screen_clear: true,
-                // TODO: RT85-specific size once confirmed.
-                screen: Some(RT100_SCREEN),
+                screen: Some(screen::spec_for(board)),
             },
             Platform::Rdmctmzt => Capabilities {
                 time_sync: true,
@@ -77,11 +79,12 @@ impl Keyboard {
         })
     }
 
-    pub fn capabilities(&self) -> Capabilities {
-        Capabilities::for_platform(match self {
+    pub fn capabilities(&self, board: Board) -> Capabilities {
+        let platform = match self {
             Keyboard::Royuan(_) => Platform::Royuan,
             Keyboard::Rdmctmzt(_) => Platform::Rdmctmzt,
-        })
+        };
+        Capabilities::for_device(platform, board)
     }
 
 

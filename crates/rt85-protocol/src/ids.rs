@@ -1,7 +1,7 @@
 //! USB identifiers for known boards on both platforms.
 //!
-//! The RT85's own IDs are not confirmed yet. Once `lsusb` output is available,
-//! add them to the matching table below.
+//! RT85 IDs come from the keybored project, which tested on a real RT85:
+//! wired `3151:5002`, 2.4 GHz dongle `3151:5006`.
 
 /// Which controller platform a board is built on. See the crate docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -39,7 +39,10 @@ pub const KNOWN: &[KnownId] = &[
     // Royuan / RT100 family (epomaker-controller default.json)
     KnownId { vid: ROYUAN_VID, pid: 0x4010, platform: Platform::Royuan, link: Link::Wired, model: "RT100" },
     KnownId { vid: ROYUAN_VID, pid: 0x4015, platform: Platform::Royuan, link: Link::Wired, model: "RT100" },
-    KnownId { vid: ROYUAN_VID, pid: 0x5002, platform: Platform::Royuan, link: Link::Wired, model: "RT100" },
+    // epomaker-controller also lists 5002 for some RT100 batches; this app
+    // targets the RT85, so 5002 means RT85 (`--board rt100` overrides).
+    KnownId { vid: ROYUAN_VID, pid: 0x5002, platform: Platform::Royuan, link: Link::Wired, model: "RT85" },
+    KnownId { vid: ROYUAN_VID, pid: 0x5006, platform: Platform::Royuan, link: Link::Dongle, model: "RT85" },
     KnownId { vid: ROYUAN_VID, pid: 0x4011, platform: Platform::Royuan, link: Link::Dongle, model: "RT100" },
     KnownId { vid: ROYUAN_VID, pid: 0x4016, platform: Platform::Royuan, link: Link::Dongle, model: "RT100" },
     // RDMCTMZT / RT82 family (rt82display)
