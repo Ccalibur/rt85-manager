@@ -107,6 +107,18 @@ impl Board {
     }
 }
 
+impl std::str::FromStr for Board {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s.to_ascii_lowercase().as_str() {
+            "rt85" => Ok(Board::Rt85),
+            "rt100" => Ok(Board::Rt100),
+            _ => Err(format!("unknown board {s:?} (use rt85 or rt100)")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Layout {
     pub name: String,

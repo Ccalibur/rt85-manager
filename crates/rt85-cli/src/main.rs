@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use rt85_device::{FoundDevice, HidApi, Keyboard, media};
 use rt85_protocol::{
     REPORT_LEN, keycode,
-    layout::{Layout, Physical},
+    layout::{Board, Layout, Physical},
     rdmctmzt::Qgif,
     royuan::{
         keys::RgbFrame,
@@ -29,6 +29,10 @@ struct Cli {
     /// RT85 Manager, else ansi.
     #[arg(long, global = true)]
     layout: Option<Physical>,
+    /// Key layout to use: rt85 (75%) or rt100. Defaults to the connected
+    /// keyboard's model, else rt85.
+    #[arg(long, global = true)]
+    board: Option<Board>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -129,7 +133,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
         Cmd::Keys => {
-            let l = Layout::rt100(physical);
+            let l = Layout::for_board(cli.board.unwrap_or_default(), physical);
             println!("# {} (reference layout; RT85 indices may differ)", l.name);
             for k in &l.keys {
                 println!("{:>3}  {:<16} {}", k.index, k.name, k.label);
@@ -153,6 +157,7 @@ fn main() -> Result<()> {
     };
     eprintln!("Using {} ({:04x}:{:04x}, {:?})", found.display_name(), found.vid, found.pid, found.platform);
     let caps = kb.capabilities();
+    let board = cli.board.unwrap_or_else(|| Board::for_model(found.known.map(|k| k.model)));
 
     match cli.cmd {
         Cmd::Time => {
@@ -174,7 +179,7 @@ fn main() -> Result<()> {
             kb.set_profile(&Profile { mode, speed, brightness, dazzle, direction, rgb: color })?;
         }
         Cmd::Color { color } => {
-            let n = Layout::rt100(physical).keys.iter().map(|k| k.index as usize + 1).max().unwrap_or(0);
+            let n = Layout::for_board(board, physical).keys.iter().map(|k| k.index as usize + 1).max().unwrap_or(0);
             kb.set_key_colors(&[RgbFrame::solid(color, n)])?;
         }
         Cmd::ProbeKey { index, color } => {
@@ -183,7 +188,7 @@ fn main() -> Result<()> {
             kb.set_key_colors(&[RgbFrame { colors, time: 0 }])?;
         }
         Cmd::Remap { key, to } => {
-            let layout = Layout::rt100(physical);
+            let layout = Layout::for_board(board, physical);
             let index = match parse_num(&key) {
                 Some(n) => n,
                 None => layout.key(&key.to_uppercase()).map(|k| k.index).ok_or_else(|| anyhow!("unknown key {key:?}; see `rt85 keys`"))?,
