@@ -62,6 +62,18 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.2.0" date="2026-11-03">
+      <description>
+        <p>Macros, live screen content, RT85 75% layout and desktop integration.</p>
+        <ul>
+          <li>Macros: key, text and delay steps on any key, played by the app while it runs</li>
+          <li>Live screen: now-playing media with cover art and time bar, game FPS from MangoHud</li>
+          <li>RT85 75% board in US ANSI or UK ISO, with square keycaps</li>
+          <li>Settings: follow the COSMIC theme or KDE colour scheme, frosted glass</li>
+          <li>Window controls now show on KDE and GNOME</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-02">
       <description>
         <p>First release: lighting, per-key colours, remapping, screen upload and widgets.</p>
