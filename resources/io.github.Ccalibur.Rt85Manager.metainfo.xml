@@ -70,6 +70,18 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.3.0" date="2026-11-03">
+      <description>
+        <p>RT85 support built from Epomaker's own driver: its command set, screen and key map.</p>
+        <ul>
+          <li>Asks the keyboard which model it is, since several share one USB ID</li>
+          <li>RT85 lighting with its 22 effects, remapping and per-key colours on its own commands</li>
+          <li>Real RT85 key positions from Epomaker's default key map</li>
+          <li>Full 320x172 screen: still images, full-screen GIFs and a wide now-playing card</li>
+          <li>Screen language switch; clear screen and CPU/temperature widgets stay RT100-only</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-11-03">
       <description>
         <p>Macros, live screen content, RT85 75% layout and desktop integration.</p>

@@ -2,7 +2,7 @@
 # Install:  sudo install -Dm644 70-epomaker-rt85.rules /etc/udev/rules.d/
 #           sudo udevadm control --reload && sudo udevadm trigger   (then replug)
 #
-# Royuan platform (RT100 family; the RT85 may be one of these)
+# Royuan platform (RT85, RT100 and other 3151:xxxx boards)
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3151", TAG+="uaccess"
 # RDMCTMZT platform (RT82 family) + its LCD sub-device
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="36b0", TAG+="uaccess"

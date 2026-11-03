@@ -48,8 +48,8 @@
 ## Install
 
 Download a package from [Releases](https://github.com/Ccalibur/rt85-manager/releases).
-The binaries need glibc 2.39 or newer, so they run on **Arch**, **Fedora 40+** and
-other current distros (x86_64).
+The binaries need glibc 2.35 or newer, so they run on **Ubuntu 22.04+**, **Debian 12+**,
+**Fedora**, **Arch** and other current distros (x86_64).
 
 | Package | Install and run |
 |---|---|
