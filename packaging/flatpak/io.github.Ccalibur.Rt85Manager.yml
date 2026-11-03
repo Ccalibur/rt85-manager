@@ -13,6 +13,8 @@ finish-args:
   - --device=all
   # lets libudev enumerate the hidraw devices
   - --filesystem=/run/udev:ro
+  # follow the KDE colour scheme
+  - --filesystem=xdg-config/kdeglobals:ro
 modules:
   - name: rt85-manager
     buildsystem: simple

@@ -33,7 +33,11 @@
 - **Key remapping:** pick a key and choose what it sends
 - **Screen:** upload images and animated GIFs (fill, fit or stretch), clear the screen
 - **Screen widgets:** sync the clock, stream live CPU usage and temperature
-- **CLI:** everything above, scriptable, plus raw packets for protocol probing
+- **Macros:** key, text and delay steps on any key. A key is remapped to a spare F13–F24 code, and the app types the macro (via `/dev/uinput`) while it is running; the firmware's own macro memory isn't reverse-engineered yet
+- **Live screen:** now-playing media from MPRIS (cover art, title, time bar) and game FPS from MangoHud, drawn onto the screen
+- **Layouts:** the RT85's 75% board in US ANSI or UK ISO (asked on first run); the RT100 board when one is detected
+- **Desktop integration:** follows the COSMIC theme or the KDE colour scheme, optional frosted glass, window controls on KDE/GNOME
+- **CLI:** everything above, scriptable, plus raw packets for protocol probing (`--layout ansi|iso`)
 
 ## Install
 

@@ -20,6 +20,8 @@ pub struct DeviceSummary {
     pub model: Option<&'static str>,
     pub manufacturer: String,
     pub interfaces: Vec<String>,
+    /// hidraw node of every interface (the macro listener reads these).
+    pub hid_paths: Vec<String>,
     pub caps: Capabilities,
 }
 
@@ -34,6 +36,8 @@ pub enum Job {
     SyncTime,
     Cpu(u8),
     Temperature(u8),
+    /// Several jobs in a row (e.g. restore one key, remap another).
+    Batch(Vec<Job>),
 }
 
 impl Job {
@@ -50,6 +54,7 @@ impl Job {
             Job::SyncTime => "sync the clock".into(),
             Job::Cpu(v) => format!("show CPU {v}%"),
             Job::Temperature(v) => format!("show {v} °C"),
+            Job::Batch(jobs) => jobs.iter().map(Job::describe).collect::<Vec<_>>().join(", "),
         }
     }
 }
@@ -105,6 +110,13 @@ impl Worker {
     }
 
     fn run_inner(&mut self, job: Job, progress: &mut dyn FnMut(usize, usize)) -> rt85_device::Result<String> {
+        if let Job::Batch(jobs) = job {
+            let mut last = String::new();
+            for j in jobs {
+                last = self.run_inner(j, progress)?;
+            }
+            return Ok(last);
+        }
         let dev = self.active.and_then(|i| self.found.get(i)).cloned().ok_or(rt85_device::Error::NotFound)?;
         if self.kb.is_none() {
             let api = self.api()?;
@@ -149,6 +161,7 @@ impl Worker {
                 kb.set_temperature(v)?;
                 format!("{v} °C")
             }
+            Job::Batch(_) => unreachable!("handled above"),
         })
     }
 }
@@ -170,6 +183,7 @@ fn summary(f: &FoundDevice) -> DeviceSummary {
                 format!("#{} {} [{}]", i.number, i.path.to_string_lossy(), u.join(" "))
             })
             .collect(),
+        hid_paths: f.interfaces.iter().map(|i| i.path.to_string_lossy().into_owned()).collect(),
         caps: Capabilities::for_platform(f.platform),
     }
 }

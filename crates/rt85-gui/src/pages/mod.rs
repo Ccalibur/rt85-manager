@@ -1,7 +1,9 @@
 pub mod device;
 pub mod keys;
 pub mod lighting;
+pub mod macros;
 pub mod screen;
+pub mod settings;
 
 use crate::worker::Job;
 
@@ -10,6 +12,8 @@ pub enum Output<M> {
     None,
     /// Run on the keyboard; the label is shown while it is busy.
     Job(Job, String),
+    /// Run on the keyboard in the background, without the busy banner.
+    QuietJob(Job),
     /// Run an async task whose result comes back to the page.
     Task(cosmic::Task<M>),
 }

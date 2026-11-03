@@ -7,7 +7,11 @@ use crate::{
     worker::Job,
 };
 use cosmic::{Element, iced::Length, widget};
-use rt85_protocol::{keycode, layout::Layout, royuan::keys::{MAX_KEYS, RgbFrame}};
+use rt85_protocol::{
+    keycode,
+    layout::{Board, Layout, Physical},
+    royuan::keys::{MAX_KEYS, RgbFrame},
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +35,8 @@ pub enum Message {
 
 pub struct Page {
     layout: Layout,
+    board: Board,
+    physical: Physical,
     tab: Tab,
     selected: BTreeSet<u8>,
     colors: BTreeMap<u8, color::Rgb>,
@@ -38,21 +44,54 @@ pub struct Page {
     remaps: BTreeMap<u8, u8>,
     color: ColorEditor,
     target: Option<usize>,
+    /// Remap targets for the current layout: (HID usage, name).
+    keycodes: Vec<(u8, &'static str)>,
     keycode_names: Vec<String>,
 }
 
 impl Page {
-    pub fn new() -> Self {
+    pub fn new(physical: Physical) -> Self {
+        let keycodes = physical.keycodes();
+        let board = Board::default();
         Self {
-            layout: Layout::rt100_uk_iso(),
+            layout: Layout::for_board(board, physical),
+            board,
+            physical,
             tab: Tab::Colors,
             selected: BTreeSet::new(),
             colors: BTreeMap::new(),
             remaps: BTreeMap::new(),
             color: ColorEditor::new((255, 0, 0)),
             target: None,
-            keycode_names: keycode::KEYCODES.iter().map(|(_, n)| (*n).to_owned()).collect(),
+            keycode_names: keycodes.iter().map(|(_, n)| (*n).to_owned()).collect(),
+            keycodes,
         }
+    }
+
+    /// Switch between the ANSI and ISO boards. Colours and remaps are keyed by
+    /// LED index, so they carry over; selection of keys that no longer exist
+    /// is dropped.
+    pub fn set_physical(&mut self, physical: Physical) {
+        self.physical = physical;
+        let target = self.target.and_then(|t| self.keycodes.get(t)).map(|(c, _)| *c);
+        self.layout = Layout::for_board(self.board, physical);
+        self.keycodes = physical.keycodes();
+        self.keycode_names = self.keycodes.iter().map(|(_, n)| (*n).to_owned()).collect();
+        self.target = target.and_then(|c| self.keycodes.iter().position(|(k, _)| *k == c));
+        let present: BTreeSet<u8> = self.layout.keys.iter().map(|k| k.index).collect();
+        self.selected.retain(|i| present.contains(i));
+    }
+
+    /// Follow the connected keyboard (RT100 vs the RT85 75% board).
+    pub fn set_board(&mut self, board: Board) {
+        if board != self.board {
+            self.board = board;
+            self.set_physical(self.physical);
+        }
+    }
+
+    pub fn layout(&self) -> &Layout {
+        &self.layout
     }
 
     /// Demo mode: a rainbow across the board and one remap.
@@ -105,7 +144,7 @@ impl Page {
             Message::RemapTarget(i) => self.target = Some(i),
             Message::ApplyRemap => {
                 if let (Some(&index), Some(t)) = (self.selected.first(), self.target) {
-                    let code = keycode::KEYCODES[t].0;
+                    let code = self.keycodes[t].0;
                     self.remaps.insert(index, code);
                     return Output::Job(Job::Remap { index, code }, fl!("remapping"));
                 }
@@ -124,8 +163,14 @@ impl Page {
         let selected = &self.selected;
         let tab = self.tab;
         let color_of = move |i: u8| if tab == Tab::Colors { colors.get(&i).copied() } else { None };
+        let keycodes = &self.keycodes;
         let badge_of = move |i: u8| {
-            if tab == Tab::Remap { remaps.get(&i).and_then(|c| keycode::name(*c)).map(|n| format!("→ {n}")) } else { None }
+            if tab != Tab::Remap {
+                return None;
+            }
+            let code = *remaps.get(&i)?;
+            let name = keycodes.iter().find(|(c, _)| *c == code).map(|(_, n)| *n).or_else(|| keycode::name(code))?;
+            Some(format!("→ {name}"))
         };
         let is_selected = move |i: u8| selected.contains(&i);
         let board = KeyView { layout: &self.layout, unit: 46.0, color_of: &color_of, badge_of: &badge_of, is_selected: &is_selected }

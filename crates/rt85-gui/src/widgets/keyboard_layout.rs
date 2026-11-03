@@ -63,7 +63,7 @@ impl<'a> KeyView<'a> {
                     .height(Length::Fixed(self.unit - gap))
                     .padding(2)
                     .selected((self.is_selected)(k.index))
-                    .class(cosmic::theme::Button::Standard)
+                    .class(keycap())
                     .on_press(on_press(k.index));
                 row = row.push(button);
                 row = row.push(widget::Space::new().width(Length::Fixed(gap)));
@@ -72,5 +72,35 @@ impl<'a> KeyView<'a> {
             column = column.push(row);
         }
         column.into()
+    }
+}
+
+/// Square keycap: small corner radius, a thin edge, accent outline when selected.
+fn keycap() -> cosmic::theme::Button {
+    use cosmic::{
+        iced::{Background, Color},
+        widget::button::Style,
+    };
+    fn style(theme: &cosmic::Theme, selected: bool, fill: impl Fn(&cosmic::cosmic_theme::Component) -> cosmic::cosmic_theme::palette::Srgba) -> Style {
+        let c = theme.cosmic();
+        let mut s = Style::new();
+        s.background = Some(Background::Color(fill(&c.button).into()));
+        s.border_radius = 4.0.into();
+        s.border_width = if selected { 2.0 } else { 1.0 };
+        s.border_color = if selected { c.accent_color().into() } else { c.button.divider.into() };
+        s.text_color = Some(c.button.on.into());
+        s.icon_color = Some(c.button.on.into());
+        if selected {
+            let mut a: Color = c.accent_color().into();
+            a.a = 0.18;
+            s.overlay = Some(Background::Color(a));
+        }
+        s
+    }
+    cosmic::theme::Button::Custom {
+        active: Box::new(|selected, t| style(t, selected, |b| b.base)),
+        disabled: Box::new(|t| style(t, false, |b| b.disabled)),
+        hovered: Box::new(|selected, t| style(t, selected, |b| b.hover)),
+        pressed: Box::new(|selected, t| style(t, selected, |b| b.pressed)),
     }
 }

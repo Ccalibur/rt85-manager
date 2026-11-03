@@ -1,11 +1,19 @@
 //! Built-in screen: image/GIF upload, clock, CPU/temperature widgets.
 
 use super::{Ctx, Output};
-use crate::{fl, worker::Job};
+use crate::{
+    fl,
+    live::{self, Mode, Snapshot, card::Card, fps},
+    worker::Job,
+};
 use cosmic::{Element, iced::Length, widget};
 use rt85_device::media::{self, Fit};
 use rt85_protocol::{rdmctmzt::Qgif, royuan::screen::{Animation, ScreenSpec}};
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -19,6 +27,13 @@ pub enum Message {
     SyncTime,
     CpuFeed(bool),
     TempFeed(bool),
+    LiveMode(usize),
+    LiveRefresh(usize),
+    FpsGauge(bool),
+    LiveTick,
+    LivePolled(Box<Snapshot>),
+    LiveRendered(Arc<Card>, Option<TrackKey>, bool),
+    SetupMangoHud,
 }
 
 #[derive(Debug)]
@@ -45,7 +60,32 @@ pub struct Page {
     pub temp_feed: bool,
     /// Screen size the current preview was made for.
     spec: Option<ScreenSpec>,
+    live: Live,
 }
+
+/// Title, artist, playing.
+type TrackKey = (String, String, bool);
+
+/// Live screen state.
+struct Live {
+    mode: Mode,
+    mode_names: Vec<String>,
+    refresh: usize,
+    refresh_names: Vec<String>,
+    fps_gauge: bool,
+    polling: bool,
+    rendering: bool,
+    snap: Snapshot,
+    preview: Option<widget::image::Handle>,
+    /// Hash and track of the last image sent, and when.
+    sent: Option<(u64, Option<TrackKey>, bool, Instant)>,
+    setup_error: Option<String>,
+}
+
+/// Seconds between progress refreshes; `None` = only when the track changes.
+const REFRESH: [Option<u64>; 4] = [None, Some(15), Some(30), Some(60)];
+/// Never upload more often than this, whatever changes.
+const MIN_UPLOAD_GAP: Duration = Duration::from_secs(5);
 
 const FITS: [Fit; 3] = [Fit::Cover, Fit::Contain, Fit::Stretch];
 
@@ -61,7 +101,84 @@ impl Page {
             cpu_feed: false,
             temp_feed: false,
             spec: None,
+            live: Live {
+                mode: crate::demo::live_mode(),
+                mode_names: vec![fl!("live-off"), fl!("live-media"), fl!("live-fps"), fl!("live-both")],
+                refresh: 2,
+                refresh_names: vec![
+                    fl!("refresh-track"),
+                    fl!("refresh-every", secs = 15),
+                    fl!("refresh-every", secs = 30),
+                    fl!("refresh-every", secs = 60),
+                ],
+                fps_gauge: false,
+                polling: false,
+                rendering: false,
+                snap: Snapshot::default(),
+                preview: None,
+                sent: None,
+                setup_error: None,
+            },
         }
+    }
+
+    /// Whether the app should send `LiveTick`s.
+    pub fn live_active(&self) -> bool {
+        self.live.mode != Mode::Off || self.live.fps_gauge
+    }
+
+    /// FPS for the CPU gauge, when that's switched on and a game is running.
+    pub fn gauge_fps(&self) -> Option<u8> {
+        self.live.fps_gauge.then_some(())?;
+        self.live.snap.fps.as_ref().map(|f| f.fps.min(100) as u8)
+    }
+
+    fn live_render(&mut self) -> Output<Message> {
+        if self.live.rendering || self.live.mode == Mode::Off {
+            return Output::None;
+        }
+        self.live.rendering = true;
+        let spec = self.spec.unwrap_or(rt85_protocol::royuan::screen::RT100_SCREEN);
+        let mode = self.live.mode;
+        let media = self.live.snap.media.clone().filter(|_| mode.media());
+        let fps = self.live.snap.fps.clone().filter(|_| mode.fps());
+        let key = media.as_ref().map(|m| m.key());
+        let has_fps = fps.is_some();
+        let a = cosmic::theme::active().cosmic().accent_color();
+        let accent = [a.red, a.green, a.blue].map(|c| (c * 255.0).round() as u8);
+        Output::Task(cosmic::task::future(async move {
+            let card = tokio::task::spawn_blocking(move || {
+                live::card::render(spec.width.into(), spec.height.into(), media.as_ref(), fps.as_ref(), accent)
+            })
+            .await
+            .expect("render task");
+            Message::LiveRendered(Arc::new(card), key, has_fps)
+        }))
+    }
+
+    /// Decide whether the freshly rendered image goes to the keyboard.
+    fn live_upload(&mut self, card: &Card, key: Option<TrackKey>, has_fps: bool, ctx: &Ctx) -> Output<Message> {
+        let Some(spec) = self.spec else { return Output::None };
+        if !ctx.connected || ctx.busy || !ctx.caps.screen_rgb565 {
+            return Output::None;
+        }
+        let now = Instant::now();
+        let due = match &self.live.sent {
+            None => true,
+            Some((hash, k, f, at)) => {
+                let since = now.duration_since(*at);
+                let changed_track = *k != key || *f != has_fps;
+                let refresh = REFRESH[self.live.refresh].is_some_and(|s| since >= Duration::from_secs(s));
+                *hash != card.hash && since >= MIN_UPLOAD_GAP && (changed_track || refresh)
+            }
+        };
+        if !due {
+            return Output::None;
+        }
+        self.live.sent = Some((card.hash, key, has_fps, now));
+        let frame = rt85_protocol::royuan::screen::encode_rgba(card.rgba.as_raw(), spec.width, spec.height);
+        let anim = Animation { width: spec.width, height: spec.height, delay_ms: 0, frames: vec![frame] };
+        Output::QuietJob(Job::Upload(Arc::new(anim)))
     }
 
     /// Re-prepare when the connected keyboard (and so the screen size) changes.
@@ -144,6 +261,46 @@ impl Page {
             Message::SyncTime => return Output::Job(Job::SyncTime, fl!("syncing-time")),
             Message::CpuFeed(v) => self.cpu_feed = v,
             Message::TempFeed(v) => self.temp_feed = v,
+            Message::LiveMode(i) => {
+                self.live.mode = Mode::ALL[i];
+                self.live.sent = None;
+                if self.live.mode == Mode::Off {
+                    self.live.preview = None;
+                }
+                return self.update(Message::LiveTick, ctx);
+            }
+            Message::LiveRefresh(i) => self.live.refresh = i,
+            Message::FpsGauge(v) => {
+                self.live.fps_gauge = v;
+                return self.update(Message::LiveTick, ctx);
+            }
+            Message::LiveTick => {
+                if self.live.polling || !self.live_active() {
+                    return Output::None;
+                }
+                self.live.polling = true;
+                let (m, f) = (self.live.mode.media(), self.live.mode.fps() || self.live.fps_gauge);
+                return Output::Task(cosmic::task::future(async move {
+                    Message::LivePolled(Box::new(live::poll(m, f).await))
+                }));
+            }
+            Message::LivePolled(snap) => {
+                self.live.polling = false;
+                if *snap != self.live.snap || self.live.preview.is_none() {
+                    self.live.snap = *snap;
+                    return self.live_render();
+                }
+            }
+            Message::LiveRendered(card, key, has_fps) => {
+                self.live.rendering = false;
+                let (w, h) = card.rgba.dimensions();
+                self.live.preview = Some(widget::image::Handle::from_rgba(w, h, card.rgba.as_raw().clone()));
+                return self.live_upload(&card, key, has_fps, ctx);
+            }
+            Message::SetupMangoHud => {
+                self.live.setup_error = fps::enable_autostart().err().map(|e| e.to_string());
+                self.live.snap.fps_status = Some(fps::status());
+            }
         }
         Output::None
     }
@@ -205,11 +362,77 @@ impl Page {
                 .add(widget::settings::item(fl!("temp-feed"), widget::toggler(self.temp_feed).on_toggle(Message::TempFeed)));
         }
 
-        let mut col = vec![image.into(), preview_col.into(), actions.into(), widgets.into()];
+        let mut col = vec![image.into(), preview_col.into(), actions.into(), widgets.into(), self.live_view(ctx)];
         if ctx.connected && !caps.screen_rgb565 && !caps.screen_qgif {
             col.insert(0, super::unsupported(fl!("unsupported-screen")));
         }
         widget::settings::view_column(col).into()
+    }
+}
+
+impl Page {
+    fn live_view(&self, ctx: &Ctx) -> Element<'_, Message> {
+        let space = cosmic::theme::spacing();
+        let l = &self.live;
+        let mut section = widget::settings::section()
+            .title(fl!("live-screen"))
+            .add(
+                widget::settings::item::builder(fl!("live-show"))
+                    .description(fl!("live-show-help"))
+                    .control(widget::dropdown(&l.mode_names, Mode::ALL.iter().position(|m| *m == l.mode), Message::LiveMode)),
+            )
+            .add(
+                widget::settings::item::builder(fl!("live-refresh"))
+                    .description(fl!("live-refresh-help"))
+                    .control(widget::dropdown(&l.refresh_names, Some(l.refresh), Message::LiveRefresh)),
+            );
+
+        if l.mode.media() {
+            let status = match (&l.snap.media, &l.snap.media_error) {
+                (Some(m), _) => {
+                    let state = if m.playing { fl!("playing") } else { fl!("paused") };
+                    if m.artist.is_empty() { format!("{} ({state})", m.title) } else { format!("{} — {} ({state})", m.title, m.artist) }
+                }
+                (None, Some(e)) => format!("{}: {e}", fl!("error")),
+                (None, None) => fl!("no-media"),
+            };
+            section = section.add(widget::settings::item(fl!("now-playing"), widget::text::body(status)));
+        }
+
+        if l.mode.fps() || l.fps_gauge {
+            let control: Element<Message> = match (&l.snap.fps, l.snap.fps_status) {
+                (Some(f), _) => widget::text::body(format!("{} — {} FPS", f.game, f.fps)).into(),
+                (None, Some(fps::Status::NotInstalled)) => widget::text::body(fl!("mangohud-missing")).into(),
+                (None, Some(fps::Status::NeedsAutostart)) => {
+                    widget::button::standard(fl!("mangohud-setup")).on_press(Message::SetupMangoHud).into()
+                }
+                (None, _) => widget::text::body(fl!("no-game")).into(),
+            };
+            section = section.add(
+                widget::settings::item::builder(fl!("game-fps")).description(fl!("game-fps-help")).control(control),
+            );
+        }
+        if ctx.caps.telemetry {
+            section = section.add(
+                widget::settings::item::builder(fl!("fps-gauge"))
+                    .description(fl!("fps-gauge-help"))
+                    .toggler(l.fps_gauge, Message::FpsGauge),
+            );
+        }
+
+        let mut col = widget::column::with_capacity(4).spacing(space.space_xs).push(section);
+        if ctx.connected && !ctx.caps.screen_rgb565 && l.mode != Mode::Off {
+            col = col.push(widget::warning(fl!("live-unsupported")));
+        }
+        if let Some(e) = &l.setup_error {
+            col = col.push(widget::warning(e.clone()));
+        }
+        if let Some(h) = &l.preview {
+            col = col
+                .push(widget::text::caption(fl!("live-preview")))
+                .push(widget::image(h.clone()).width(Length::Fixed(240.0)));
+        }
+        col.into()
     }
 }
 
