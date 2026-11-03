@@ -20,11 +20,17 @@
 
 <sub>Taken in demo mode (`RT85_DEMO=1`), which simulates a connected keyboard.</sub>
 
-| Lighting | Per-key colours |
+| Lighting | Per-key colours (RT85 75%) |
 |---|---|
-| ![Lighting page: effect mode, speed, brightness, direction and colour](docs/screenshots/lighting.png) | ![Keys page: clickable keyboard with a rainbow of per-key colours](docs/screenshots/keys.png) |
-| **Screen** | **Device** |
-| ![Screen page: image preview, upload, clock and CPU/temperature widgets](docs/screenshots/screen.png) | ![Device page: connected keyboard, platform and capabilities](docs/screenshots/device.png) |
+| ![Lighting page: effect mode, speed, brightness, direction and colour](docs/screenshots/lighting.png) | ![Keys page: the RT85's 75% board with square keycaps and a rainbow of per-key colours](docs/screenshots/keys.png) |
+| **Macros** | **Screen** |
+| ![Macros page: a list of macros, each assigned to a key, with key, text and delay steps](docs/screenshots/macros.png) | ![Screen page: image preview, upload, clock, CPU/temperature widgets and live screen](docs/screenshots/screen.png) |
+| **Settings** | **Device** |
+| ![Settings page: keyboard layout, colour scheme and frosted glass](docs/screenshots/settings.png) | ![Device page: connected keyboard, platform and capabilities](docs/screenshots/device.png) |
+
+**Live screen:** what the keyboard's screen shows for now playing, now playing + FPS, and game FPS.
+
+![Three rendered screen images: a now-playing card with cover art, title, artist and time bar; the same with an FPS badge; and a large FPS counter](docs/screenshots/live-screen.png)
 
 ## Features
 

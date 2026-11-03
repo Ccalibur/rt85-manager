@@ -238,8 +238,8 @@ mod tests {
         let dir = PathBuf::from(std::env::var("RT85_CARD_DIR").unwrap_or_else(|_| "target/cards".into()));
         std::fs::create_dir_all(&dir).unwrap();
         let media = NowPlaying {
-            title: "A fairly long song title that will not fit".into(),
-            artist: "Some Artist".into(),
+            title: "Midnight Drive (Extended Mix)".into(),
+            artist: "Neon Coast".into(),
             art_url: std::env::var("RT85_CARD_ART").ok(),
             length: Some(Duration::from_secs(213)),
             position: Some(Duration::from_secs(83)),
@@ -247,7 +247,7 @@ mod tests {
         };
         let paused = NowPlaying { playing: false, art_url: None, ..media.clone() };
         let fps = Reading { fps: 144, game: "Cyberpunk2077".into() };
-        let accent = [233, 100, 58];
+        let accent = [99, 208, 223];
         for (name, m, f) in [
             ("media", Some(&media), None),
             ("paused-noart", Some(&paused), None),

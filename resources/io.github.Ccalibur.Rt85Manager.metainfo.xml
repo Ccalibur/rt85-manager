@@ -48,8 +48,12 @@
       <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/lighting.png</image>
     </screenshot>
     <screenshot>
-      <caption>Per-key colours on a clickable layout</caption>
+      <caption>Per-key colours on the RT85 layout</caption>
       <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/keys.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Macros on any key</caption>
+      <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/macros.png</image>
     </screenshot>
     <screenshot>
       <caption>Screen image upload and widgets</caption>
@@ -58,6 +62,10 @@
     <screenshot>
       <caption>Connected keyboard details</caption>
       <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/device.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings: layout, colour scheme and frosted glass</caption>
+      <image>https://raw.githubusercontent.com/Ccalibur/rt85-manager/main/docs/screenshots/settings.png</image>
     </screenshot>
   </screenshots>
   <content_rating type="oars-1.1"/>
