@@ -339,7 +339,7 @@ impl Page {
         }
         if let Some(p) = &self.prepared {
             if let Some(h) = &p.preview {
-                preview_col = preview_col.push(widget::image(h.clone()).width(Length::Fixed(240.0)));
+                preview_col = preview_col.push(widget::image(h.clone()).width(Length::Fixed(preview_width(self.spec))));
             }
             preview_col = preview_col.push(widget::text::caption(p.summary.clone()));
         }
@@ -430,10 +430,15 @@ impl Page {
         if let Some(h) = &l.preview {
             col = col
                 .push(widget::text::caption(fl!("live-preview")))
-                .push(widget::image(h.clone()).width(Length::Fixed(240.0)));
+                .push(widget::image(h.clone()).width(Length::Fixed(preview_width(self.spec))));
         }
         col.into()
     }
+}
+
+/// Previews are drawn at 1.5x the screen's pixel size (480 px wide for the RT85).
+fn preview_width(spec: Option<ScreenSpec>) -> f32 {
+    spec.map_or(240.0, |s| s.width as f32 * 1.5).min(480.0)
 }
 
 fn prepare(path: &std::path::Path, spec: ScreenSpec, fit: Fit) -> Result<Prepared, String> {
@@ -444,10 +449,18 @@ fn prepare(path: &std::path::Path, spec: ScreenSpec, fit: Fit) -> Result<Prepare
         return Ok(Prepared { payload: Payload::Qgif(Arc::new(q)), preview: None, summary });
     }
     let anim = media::load(path, spec, fit).map_err(|e| e.to_string())?;
-    // Preview: the first frame, decoded again at the target size.
+    // Preview: the first frame, decoded again at the target size and placed
+    // on the whole screen. Animations smaller than the screen show up in its
+    // top-left corner.
     let img = image::open(path).map_err(|e| e.to_string())?;
     let rgba = media::fit(&img, anim.width.into(), anim.height.into(), fit);
-    let preview = Some(widget::image::Handle::from_rgba(rgba.width(), rgba.height(), rgba.into_raw()));
-    let summary = format!("{} frame(s), {} × {}", anim.frames.len(), anim.width, anim.height);
+    let mut screen = image::RgbaImage::from_pixel(spec.width.into(), spec.height.into(), image::Rgba([0, 0, 0, 255]));
+    image::imageops::overlay(&mut screen, &rgba, 0, 0);
+    let preview = Some(widget::image::Handle::from_rgba(screen.width(), screen.height(), screen.into_raw()));
+    let summary = if (anim.width, anim.height) == (spec.width, spec.height) {
+        format!("{} frame(s), {} × {}", anim.frames.len(), anim.width, anim.height)
+    } else {
+        format!("{} frame(s), {} × {} in the top-left of the screen", anim.frames.len(), anim.width, anim.height)
+    };
     Ok(Prepared { payload: Payload::Rgb565(Arc::new(anim)), preview, summary })
 }

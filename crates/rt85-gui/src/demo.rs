@@ -1,4 +1,4 @@
-//! Demo mode (`RT85_DEMO=1`): pretends an RT100-family keyboard is connected
+//! Demo mode (`RT85_DEMO=1`): pretends an RT85 is connected
 //! so the UI can be explored and screenshotted without hardware. Nothing is
 //! sent anywhere.
 //!
@@ -42,14 +42,14 @@ pub fn image_path() -> Option<std::path::PathBuf> {
 
 pub fn device() -> DeviceSummary {
     DeviceSummary {
-        name: "Epomaker keyboard (demo)".into(),
+        name: "Epomaker RT85 (demo)".into(),
         vid: ROYUAN_VID,
-        pid: 0x4010,
+        pid: 0x5002,
         platform: Platform::Royuan,
         link: Link::Wired,
-        model: Some("Demo"),
+        model: Some("RT85"),
         manufacturer: "Demo mode, nothing is sent".into(),
-        interfaces: vec!["#1 /dev/hidraw-demo [ff00:0001]".into()],
+        interfaces: vec!["#2 /dev/hidraw-demo [ffff:0002]".into()],
         hid_paths: Vec::new(),
         caps: Capabilities::for_device(Platform::Royuan, rt85_protocol::layout::Board::Rt85),
     }

@@ -12,9 +12,9 @@
 
 > [!WARNING]
 > **Experimental.** The keyboard protocol is ported from reverse-engineered work on
-> sibling boards (RT100 and RT82, see [`docs/protocol.md`](docs/protocol.md)), and it
-> hasn't been tested on an RT85 yet. If you own one, please open an issue with the
-> output of `rt85 list --all`.
+> sibling boards (RT100 and RT82) and on the RT85's 320×172 screen (see
+> [`docs/protocol.md`](docs/protocol.md)). It hasn't been tested by this project on an
+> RT85 yet. If you own one, please open an issue with the output of `rt85 list --all`.
 
 ## Screenshots
 
@@ -28,9 +28,9 @@
 | **Settings** | **Device** |
 | ![Settings page: keyboard layout, colour scheme and frosted glass](docs/screenshots/settings.png) | ![Device page: connected keyboard, platform and capabilities](docs/screenshots/device.png) |
 
-**Live screen:** what the keyboard's screen shows for now playing, now playing + FPS, and game FPS.
+**Live screen:** what the RT85's 320×172 screen shows for now playing, now playing + FPS, and game FPS.
 
-![Three rendered screen images: a now-playing card with cover art, title, artist and time bar; the same with an FPS badge; and a large FPS counter](docs/screenshots/live-screen.png)
+![Three rendered 320×172 screen images: a now-playing card for Lagtrain by inabakumori with cover art on the left and title, artist and time bar on the right; the same with an FPS badge; and a large FPS counter](docs/screenshots/live-screen.png)
 
 ## Features
 

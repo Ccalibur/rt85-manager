@@ -39,7 +39,7 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
     let accent = Rgba([accent[0], accent[1], accent[2], 255]);
     let mut fonts = FONTS.lock().unwrap_or_else(|e| e.into_inner());
     let (fs, cache) = &mut *fonts;
-    let u = |v: f32| (v * w.min(h) as f32 / 162.0).round().max(1.0); // scale from the RT100 layout
+    let u = |v: f32| (v * w.min(h) as f32 / 162.0).round().max(1.0); // sizes are in RT100-screen pixels
     let pad = u(8.0);
 
     match (media, fps) {
@@ -53,10 +53,17 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
                 }
             }
 
-            let text_h = u(52.0);
-            let side = ((h as f32 - text_h - pad * 2.0).min(w as f32 - pad * 2.0)).max(0.0) as u32;
-            let x0 = (w - side) / 2;
-            let y0 = pad as u32;
+            // Cover art plus title/artist/time bar: stacked on squarish
+            // screens (RT100), side by side on wide ones (RT85, 320x172).
+            let wide = w as f32 > h as f32 * 1.3;
+            let (x0, y0, side) = if wide {
+                let side = (h as f32 - pad * 2.0).max(0.0) as u32;
+                (pad as u32, pad as u32, side)
+            } else {
+                let text_h = u(52.0);
+                let side = ((h as f32 - text_h - pad * 2.0).min(w as f32 - pad * 2.0)).max(0.0) as u32;
+                ((w - side) / 2, pad as u32, side)
+            };
             match &art {
                 Some(a) => {
                     let cover = a.image.resize_to_fill(side, side, imageops::FilterType::Lanczos3).to_rgba8();
@@ -80,22 +87,28 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
                 fps_badge(fs, cache, &mut img, f, x0 as f32 + u(4.0), y0 as f32 + u(4.0), u(1.0), accent);
             }
 
-            let mut y = y0 as f32 + side as f32 + u(5.0);
-            let tw = w as f32 - pad * 2.0;
-            text(fs, cache, &mut img, &m.title, pad, y, tw, u(12.0), true, WHITE, Align::Center);
-            y += u(15.0);
+            // Text block: below the cover, or to its right, vertically centred.
+            let (tx, tw, mut y, align, title_px, artist_px) = if wide {
+                let tx = (x0 + side) as f32 + pad * 1.5;
+                let block = u(16.0) + u(15.0) + u(5.0) + u(14.0);
+                (tx, w as f32 - tx - pad, (h as f32 - block) / 2.0, Align::Left, u(14.0), u(11.0))
+            } else {
+                (pad, w as f32 - pad * 2.0, y0 as f32 + side as f32 + u(5.0), Align::Center, u(12.0), u(10.0))
+            };
+            text(fs, cache, &mut img, &m.title, tx, y, tw, title_px, true, WHITE, align);
+            y += title_px + u(3.0);
             if !m.artist.is_empty() {
-                text(fs, cache, &mut img, &m.artist, pad, y, tw, u(10.0), false, DIM, Align::Center);
+                text(fs, cache, &mut img, &m.artist, tx, y, tw, artist_px, false, DIM, align);
             }
-            y += u(15.0);
+            y += artist_px + u(5.0) + if wide { u(6.0) } else { 0.0 };
             if let (Some(len), Some(pos)) = (m.length, m.position) {
                 let frac = (pos.as_secs_f32() / len.as_secs_f32()).clamp(0.0, 1.0);
                 let bar_h = u(3.0) as u32;
-                fill(&mut img, pad as i32, y as i32, tw as u32, bar_h, TRACK);
-                fill(&mut img, pad as i32, y as i32, (tw * frac) as u32, bar_h, accent);
+                fill(&mut img, tx as i32, y as i32, tw as u32, bar_h, TRACK);
+                fill(&mut img, tx as i32, y as i32, (tw * frac) as u32, bar_h, accent);
                 y += u(5.0);
-                text(fs, cache, &mut img, &clock(pos), pad, y, tw, u(9.0), false, DIM, Align::Left);
-                text(fs, cache, &mut img, &clock(len), pad, y, tw, u(9.0), false, DIM, Align::Right);
+                text(fs, cache, &mut img, &clock(pos), tx, y, tw, u(9.0), false, DIM, Align::Left);
+                text(fs, cache, &mut img, &clock(len), tx, y, tw, u(9.0), false, DIM, Align::Right);
             }
         }
         (None, Some(f)) => {
@@ -238,11 +251,11 @@ mod tests {
         let dir = PathBuf::from(std::env::var("RT85_CARD_DIR").unwrap_or_else(|_| "target/cards".into()));
         std::fs::create_dir_all(&dir).unwrap();
         let media = NowPlaying {
-            title: "Midnight Drive (Extended Mix)".into(),
-            artist: "Neon Coast".into(),
+            title: "Lagtrain".into(),
+            artist: "inabakumori".into(),
             art_url: std::env::var("RT85_CARD_ART").ok(),
-            length: Some(Duration::from_secs(213)),
-            position: Some(Duration::from_secs(83)),
+            length: Some(Duration::from_secs(254)),
+            position: Some(Duration::from_secs(97)),
             playing: true,
         };
         let paused = NowPlaying { playing: false, art_url: None, ..media.clone() };
@@ -255,7 +268,9 @@ mod tests {
             ("fps", None, Some(&fps)),
             ("idle", None, None),
         ] {
-            render(162, 173, m, f, accent).rgba.save(dir.join(format!("{name}.png"))).unwrap();
+            let rt85_protocol::royuan::screen::ScreenSpec { width, height } = rt85_protocol::royuan::screen::RT85_SCREEN;
+            render(width.into(), height.into(), m, f, accent).rgba.save(dir.join(format!("{name}.png"))).unwrap();
+            render(162, 173, m, f, accent).rgba.save(dir.join(format!("{name}-rt100.png"))).unwrap();
         }
     }
 }
