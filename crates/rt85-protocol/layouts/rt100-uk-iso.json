@@ -160,7 +160,7 @@
       "y": -0.25,
       "w": 1.25
     },
-    "RIGHT_CTRL",
+    "LEFT_CTRL",
     {
       "w": 1.25
     },
@@ -175,7 +175,7 @@
     "SPACE",
     "RIGHT_ALT",
     "FN",
-    "LEFT_CTRL",
+    "RIGHT_CTRL",
     {
       "x": 3.5
     },

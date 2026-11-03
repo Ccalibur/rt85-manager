@@ -3,10 +3,12 @@
 
 pub mod discovery;
 pub mod error;
+pub mod input;
 pub mod keyboard;
 pub mod media;
 pub mod rdmctmzt;
 pub mod royuan;
+pub mod uinput;
 
 pub use discovery::{FoundDevice, Interface, list};
 pub use error::{Error, Result};

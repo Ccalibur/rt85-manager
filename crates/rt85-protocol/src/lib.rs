@@ -15,9 +15,11 @@
 
 pub mod checksum;
 pub mod error;
+pub mod hid_report;
 pub mod ids;
 pub mod keycode;
 pub mod layout;
+pub mod macros;
 pub mod rdmctmzt;
 pub mod rgb565;
 pub mod royuan;

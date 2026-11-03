@@ -2796,6 +2796,7 @@ dependencies = [
  "byteorder-lite",
  "color_quant",
  "gif 0.14.2",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png 0.18.1",
@@ -4634,6 +4635,7 @@ dependencies = [
  "chrono",
  "hidapi",
  "image",
+ "libc",
  "rt85-protocol",
  "thiserror 2.0.21",
  "tracing",
@@ -4643,6 +4645,7 @@ dependencies = [
 name = "rt85-gui"
 version = "0.1.0"
 dependencies = [
+ "cosmic-text",
  "futures",
  "i18n-embed 0.15.4",
  "i18n-embed-fl 0.9.4",
@@ -4651,9 +4654,12 @@ dependencies = [
  "rt85-device",
  "rt85-protocol",
  "rust-embed",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zbus",
 ]
 
 [[package]]

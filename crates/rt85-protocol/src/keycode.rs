@@ -36,3 +36,53 @@ pub fn name(code: u8) -> Option<&'static str> {
 pub fn from_name(name: &str) -> Option<u8> {
     KEYCODES.iter().find(|(_, n)| n.eq_ignore_ascii_case(name)).map(|(c, _)| *c)
 }
+
+/// Linux evdev key code (`KEY_*`) for a HID keyboard usage, as the kernel's
+/// `hid-input` maps them. Used to replay macros through uinput.
+pub fn to_evdev(usage: u8) -> Option<u16> {
+    #[rustfmt::skip]
+    const TABLE: [u16; 0x74] = [
+          0,   0,   0,   0,  30,  48,  46,  32,  18,  33,  34,  35,  23,  36,  37,  38,
+         50,  49,  24,  25,  16,  19,  31,  20,  22,  47,  17,  45,  21,  44,   2,   3,
+          4,   5,   6,   7,   8,   9,  10,  11,  28,   1,  14,  15,  57,  12,  13,  26,
+         27,  43,  43,  39,  40,  41,  51,  52,  53,  58,  59,  60,  61,  62,  63,  64,
+         65,  66,  67,  68,  87,  88,  99,  70, 119, 110, 102, 104, 111, 107, 109, 106,
+        105, 108, 103,  69,  98,  55,  74,  78,  96,  79,  80,  81,  75,  76,  77,  71,
+         72,  73,  82,  83,  86, 127, 116, 117, 183, 184, 185, 186, 187, 188, 189, 190,
+        191, 192, 193, 194,
+    ];
+    match usage {
+        0xE0 => Some(29),  // left ctrl
+        0xE1 => Some(42),  // left shift
+        0xE2 => Some(56),  // left alt
+        0xE3 => Some(125), // left meta
+        0xE4 => Some(97),  // right ctrl
+        0xE5 => Some(54),  // right shift
+        0xE6 => Some(100), // right alt
+        0xE7 => Some(126), // right meta
+        u => TABLE.get(u as usize).copied().filter(|&c| c != 0),
+    }
+}
+
+/// F13..=F24: keys no board has, used as macro triggers.
+pub const MACRO_TRIGGERS: std::ops::RangeInclusive<u8> = 0x68..=0x73;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn evdev_codes() {
+        assert_eq!(to_evdev(0x04), Some(30)); // A
+        assert_eq!(to_evdev(0x28), Some(28)); // Enter
+        assert_eq!(to_evdev(0x64), Some(86)); // ISO \ = KEY_102ND
+        assert_eq!(to_evdev(0x68), Some(183)); // F13
+        assert_eq!(to_evdev(0x73), Some(194)); // F24
+        assert_eq!(to_evdev(0xE3), Some(125));
+        assert_eq!(to_evdev(0x00), None);
+        // Every named key has a code.
+        for (u, n) in KEYCODES {
+            assert!(to_evdev(*u).is_some(), "{n}");
+        }
+    }
+}

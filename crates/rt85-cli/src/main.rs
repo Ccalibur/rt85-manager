@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use rt85_device::{FoundDevice, HidApi, Keyboard, media};
 use rt85_protocol::{
     REPORT_LEN, keycode,
-    layout::Layout,
+    layout::{Layout, Physical},
     rdmctmzt::Qgif,
     royuan::{
         keys::RgbFrame,
@@ -25,6 +25,10 @@ struct Cli {
     /// Use this HID interface number instead of the auto-detected one.
     #[arg(long, global = true)]
     interface: Option<i32>,
+    /// Physical layout: ansi (US) or iso (UK). Defaults to the one chosen in
+    /// RT85 Manager, else ansi.
+    #[arg(long, global = true)]
+    layout: Option<Physical>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -113,6 +117,7 @@ fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
     let cli = Cli::parse();
+    let physical = cli.layout.or_else(gui_layout).unwrap_or(Physical::Ansi);
     let mut api = HidApi::new().context("initialising hidapi")?;
 
     match &cli.cmd {
@@ -124,7 +129,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
         Cmd::Keys => {
-            let l = Layout::rt100_uk_iso();
+            let l = Layout::rt100(physical);
             println!("# {} (reference layout; RT85 indices may differ)", l.name);
             for k in &l.keys {
                 println!("{:>3}  {:<16} {}", k.index, k.name, k.label);
@@ -169,7 +174,7 @@ fn main() -> Result<()> {
             kb.set_profile(&Profile { mode, speed, brightness, dazzle, direction, rgb: color })?;
         }
         Cmd::Color { color } => {
-            let n = Layout::rt100_uk_iso().keys.iter().map(|k| k.index as usize + 1).max().unwrap_or(0);
+            let n = Layout::rt100(physical).keys.iter().map(|k| k.index as usize + 1).max().unwrap_or(0);
             kb.set_key_colors(&[RgbFrame::solid(color, n)])?;
         }
         Cmd::ProbeKey { index, color } => {
@@ -178,7 +183,7 @@ fn main() -> Result<()> {
             kb.set_key_colors(&[RgbFrame { colors, time: 0 }])?;
         }
         Cmd::Remap { key, to } => {
-            let layout = Layout::rt100_uk_iso();
+            let layout = Layout::rt100(physical);
             let index = match parse_num(&key) {
                 Some(n) => n,
                 None => layout.key(&key.to_uppercase()).map(|k| k.index).ok_or_else(|| anyhow!("unknown key {key:?}; see `rt85 keys`"))?,
@@ -318,4 +323,14 @@ fn parse_hex(s: &str) -> Result<Vec<u8>> {
         bail!("odd number of hex digits");
     }
     (0..s.len()).step_by(2).map(|i| Ok(u8::from_str_radix(&s[i..i + 2], 16)?)).collect()
+}
+
+/// The layout picked in RT85 Manager (stored by cosmic-config as RON, e.g. `Some("iso")`).
+fn gui_layout() -> Option<Physical> {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))?;
+    let v = std::fs::read_to_string(base.join("cosmic/io.github.Ccalibur.Rt85Manager/v1/keyboard-layout")).ok()?;
+    let v = v.trim().trim_start_matches("Some(").trim_end_matches(')').trim_matches('"');
+    v.parse().ok()
 }

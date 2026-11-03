@@ -97,5 +97,6 @@
     {"name": "NUMPAD_9", "value": 98, "display_str": "9"},
     {"name": "NUMPAD_PLUS", "value": 99, "display_str": "+"},
     {"name": "NUMPAD_3", "value": 100, "display_str": "3"},
-    {"name": "NUMPAD_ENTER", "value": 101, "display_str": "Enter"}
+    {"name": "NUMPAD_ENTER", "value": 101, "display_str": "Enter"},
+    {"name": "ANSI_BACKSLASH", "value": 75, "display_str": "\\"}
   ]

@@ -11,4 +11,5 @@ hidapi.workspace = true
 image.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+libc = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
