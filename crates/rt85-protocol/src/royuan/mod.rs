@@ -4,12 +4,25 @@
 //! a checksum over those 7 bytes (see [`crate::checksum`]). The payload goes
 //! in bytes 8..64.
 
+pub mod gen2;
 pub mod keys;
 pub mod lighting;
 pub mod screen;
 pub mod wireless;
 
 use crate::{REPORT_LEN, Report, checksum::ones_complement_sum};
+
+/// Which command set a Royuan board speaks. Boards share the framing and the
+/// screen/clock commands but differ in everything else.
+///
+/// * `Yc500`: older boards such as the RT100 (`strodgers/epomaker-controller`).
+/// * `Gen2`: newer YC3123-based boards such as the RT85, Glyph and RT75. See
+///   [`gen2`] for where the layouts come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum Family {
+    Yc500,
+    Gen2,
+}
 
 /// Bytes available after the 8-byte header.
 pub const PAYLOAD_LEN: usize = REPORT_LEN - 8;

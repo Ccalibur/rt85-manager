@@ -185,10 +185,11 @@ impl App {
         self.prefs.keyboard_layout.unwrap_or(Physical::Ansi)
     }
 
-    /// Board drawn on the Keys/Macros pages follows the detected model.
+    /// Keys/Macros layout and lighting effects follow the detected board.
     fn sync_board(&mut self) {
-        let model = self.active.and_then(|i| self.devices.get(i)).and_then(|d| d.model);
-        self.keys.set_board(Board::for_model(model));
+        let board = self.active.and_then(|i| self.devices.get(i)).map_or(Board::Rt85, |d| d.board);
+        self.keys.set_board(board);
+        self.lighting.set_family(self.caps().family);
     }
 
     /// hidraw nodes of the active keyboard, for the macro listener.
@@ -304,6 +305,7 @@ impl Application for App {
         if app.demo {
             app.devices = vec![crate::demo::device()];
             app.active = Some(0);
+            app.sync_board();
             app.keys.seed_demo();
             app.lighting.seed_demo();
             let out = app.screen.on_caps_changed(app.caps().screen);

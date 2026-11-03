@@ -48,6 +48,8 @@ pub fn device() -> DeviceSummary {
         platform: Platform::Royuan,
         link: Link::Wired,
         model: Some("RT85"),
+        board: rt85_protocol::layout::Board::Rt85,
+        firmware: None,
         manufacturer: "Demo mode, nothing is sent".into(),
         interfaces: vec!["#2 /dev/hidraw-demo [ffff:0002]".into()],
         hid_paths: Vec::new(),

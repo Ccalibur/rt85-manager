@@ -1,22 +1,38 @@
-//! Screen: RGB565 image/animation upload (`0xA5`/`0x25`), clear (`0xAC`),
-//! clock (`0x28`), and the CPU/temperature widgets (`0x22`/`0x2A`).
+//! Screen: RGB565 image/animation upload (`0xA5`/`0x25`), clock (`0x28`),
+//! and, on yc500 boards only, clear (`0xAC`) and the CPU/temperature widgets
+//! (`0x22`/`0x2A`). On gen2 boards (RT85) `0xAC` erases flash instead.
 
 use super::{PAYLOAD_LEN, framed, raw};
 use crate::{ProtocolError, Report, checksum::ones_complement_sum, rgb565, time::DateTime};
 
-/// Screen geometry as the upload protocol sees it.
+/// Screen geometry and limits as the upload protocol sees it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScreenSpec {
     pub width: u16,
     pub height: u16,
+    /// Most animation frames the screen memory holds.
+    pub max_frames: u8,
+    /// Animation frames are shrunk to a multiple of this in both directions
+    /// (64 on the RT100, whose firmware works in 4 KiB pages); 1 means
+    /// animations use the full screen.
+    pub animation_align: u16,
 }
 
-/// RT100 screen.
-pub const RT100_SCREEN: ScreenSpec = ScreenSpec { width: 162, height: 173 };
-/// RT85 screen: 1.47" 320x172 panel, landscape. Size and upload format come
-/// from a USB capture of the official driver (v4 3.2.22) doing a full-screen
-/// upload, published by the keybored project.
-pub const RT85_SCREEN: ScreenSpec = ScreenSpec { width: 320, height: 172 };
+impl ScreenSpec {
+    /// Same limits, another size (the CLI's `--size`).
+    pub fn with_size(self, width: u16, height: u16) -> Self {
+        Self { width, height, ..self }
+    }
+}
+
+/// RT100 screen (limits from `strodgers/epomaker-controller`).
+pub const RT100_SCREEN: ScreenSpec = ScreenSpec { width: 162, height: 173, max_frames: 56, animation_align: 64 };
+/// RT85 screen: 1.47" 320x172 panel, landscape. The size and upload format
+/// were captured from the official driver by the keybored project; the frame
+/// limit is the vendor app's own formula for its 6 MiB of screen memory
+/// (`ramarivera/epomaker-driver-linux`, docs/display.md):
+/// floor((6 MiB - 4 KiB) / (27 × 4 KiB per frame)) - 5 still banks = 51.
+pub const RT85_SCREEN: ScreenSpec = ScreenSpec { width: 320, height: 172, max_frames: 51, animation_align: 1 };
 
 /// The screen of each supported board.
 pub const fn spec_for(board: crate::layout::Board) -> ScreenSpec {
@@ -26,15 +42,11 @@ pub const fn spec_for(board: crate::layout::Board) -> ScreenSpec {
     }
 }
 
-/// Largest frame the compact `0xA5` header can describe (16-bit size, 8-bit
-/// width and height). Bigger still images use the extended header.
-pub const COMPACT_MAX_BYTES: usize = u16::MAX as usize;
-/// Largest still image the extended header carries (24-bit size).
-pub const EXTENDED_MAX_BYTES: usize = 0xFF_FFFF;
+/// Largest frame the upload header can describe (32-bit size).
+pub const MAX_FRAME_BYTES: usize = u32::MAX as usize;
+/// Chunk indices are 16-bit.
+const MAX_CHUNKS: usize = u16::MAX as usize + 1;
 
-/// Animated frames must have both dimensions aligned to this (the firmware's
-/// framebuffer is 4 KiB page aligned).
-pub const ANIMATION_ALIGN: u16 = 64;
 pub const MAX_FRAMES: usize = 255;
 
 /// Convert a tightly packed RGBA8 buffer (`width*height*4`, row-major) into
@@ -72,79 +84,63 @@ impl Animation {
         self.width as usize * self.height as usize * 2
     }
 
-    /// Whether this upload needs the extended (full-screen) header: a single
-    /// frame wider than 255 px or bigger than 64 KiB. Only the single-frame
-    /// form has been seen from the official driver, so animations keep the
-    /// compact header.
-    pub fn is_extended(&self) -> bool {
-        self.frames.len() == 1 && (self.frame_len() > COMPACT_MAX_BYTES || self.width > 255 || self.height > 255)
-    }
-
+    /// The upload: one prepare report, then every frame's pixels.
+    ///
+    /// Layout as in the vendor driver (both families share it):
+    /// * prepare `a5 bank frames delay size[0] size[1] 00 cs`, then the
+    ///   box's left/top/right/bottom low bytes at 8..12 and high bytes at
+    ///   12..16, and size bits 16..32 at 16..18. The box is the whole image.
+    /// * data `25 frame frames delay chunkLE16 len cs` + up to 56 bytes, the
+    ///   chunk index restarting at 0 for every frame. `len` is the number of
+    ///   pixel bytes in the report (56, less on the last one).
+    ///
+    /// Stills go to bank 0. The RT100 capture (`a5000100f4da008b0000a2ad`,
+    /// last chunk `..34`) and the RT85 one (`a500010000ae00ab000040ac0000
+    /// 010001`, last chunk `..28`) are both this layout.
     pub fn reports(&self) -> Result<Vec<Report>, ProtocolError> {
         let n = self.frames.len();
         if n == 0 || n > MAX_FRAMES {
             return Err(ProtocolError::OutOfRange { what: "frame count", value: n as u32, max: MAX_FRAMES as u32 });
         }
         let frame_len = self.frame_len();
-        let extended = self.is_extended();
-        if extended {
-            if frame_len > EXTENDED_MAX_BYTES || self.height > 255 {
-                return Err(ProtocolError::PayloadTooLarge { len: frame_len, max: EXTENDED_MAX_BYTES });
-            }
-        } else {
-            if frame_len > COMPACT_MAX_BYTES {
-                return Err(ProtocolError::PayloadTooLarge { len: frame_len, max: COMPACT_MAX_BYTES });
-            }
-            if self.width > 255 || self.height > 255 {
-                return Err(ProtocolError::OutOfRange {
-                    what: "screen dimension",
-                    value: self.width.max(self.height) as u32,
-                    max: 255,
-                });
-            }
+        if frame_len == 0 || frame_len > MAX_FRAME_BYTES || frame_len.div_ceil(PAYLOAD_LEN) > MAX_CHUNKS {
+            return Err(ProtocolError::PayloadTooLarge { len: frame_len, max: MAX_CHUNKS * PAYLOAD_LEN });
         }
 
         let reports_per_frame = frame_len.div_ceil(PAYLOAD_LEN);
         let mut out = Vec::with_capacity(1 + n * reports_per_frame);
 
-        // Compact init:  a5 00 [frames] [delay] [size LE16] 00 [cs] 00 00 [w] [h]
-        // Extended init: same, with only the low bits of size and width in
-        // place, then width >> 8 at byte 14 and size >> 16 at byte 16.
         let size = (frame_len as u32).to_le_bytes();
+        let (w, h) = (self.width.to_le_bytes(), self.height.to_le_bytes());
         let head = [0xA5, 0x00, n as u8, self.delay_ms, size[0], size[1], 0x00];
-        let w = self.width.to_le_bytes();
-        let mut init = vec![
+        out.push(raw(&[
             head[0], head[1], head[2], head[3], head[4], head[5], head[6],
-            ones_complement_sum(&head), 0, 0, w[0], self.height as u8,
-        ];
-        if extended {
-            init.extend_from_slice(&[0, 0, w[1], 0, size[2]]);
-        }
-        out.push(raw(&init));
+            ones_complement_sum(&head),
+            0, 0, w[0], h[0], // left, top, right, bottom (low bytes)
+            0, 0, w[1], h[1], // ... high bytes
+            size[2], size[3],
+        ]));
 
         for (fi, frame) in self.frames.iter().enumerate() {
             if frame.len() != frame_len {
                 return Err(ProtocolError::PayloadTooLarge { len: frame.len(), max: frame_len });
             }
             for (seq, chunk) in frame.chunks(PAYLOAD_LEN).enumerate() {
-                let last = seq + 1 == reports_per_frame;
                 let s = (seq as u16).to_le_bytes();
-                // The extended stream ends with 0x28; sending the compact
-                // 0x34 there blanks the screen.
-                let kind = match (last, extended) {
-                    (false, _) => 0x38,
-                    (true, false) => 0x34,
-                    (true, true) => 0x28,
-                };
-                // 1-based frame number
-                out.push(framed([0x25, 0x00, (fi + 1) as u8, 0x00, s[0], s[1], kind], chunk));
+                out.push(framed([0x25, fi as u8, n as u8, self.delay_ms, s[0], s[1], chunk.len() as u8], chunk));
             }
         }
         Ok(out)
     }
 }
 
-/// Wipe the uploaded image (telemetry widgets are unaffected).
+/// Did the keyboard accept a prepare report? The reply echoes `a5` and has
+/// 1 at `[1]` when ready, 0 while it is still busy with the last picture.
+pub fn prepare_accepted(reply: &[u8]) -> Option<bool> {
+    (reply.len() > 1 && reply[0] == 0xA5).then(|| reply[1] == 1)
+}
+
+/// Wipe the uploaded image (yc500 only; telemetry widgets are unaffected).
 pub fn clear() -> Report {
     framed([0xAC, 0, 0, 0, 0, 0, 0], &[])
 }
@@ -211,28 +207,36 @@ mod tests {
             delay_ms: 0,
             frames: vec![encode_rgba(&red, s.width, s.height)],
         };
-        assert!(anim.is_extended());
         let r = anim.reports().unwrap();
-        // Init and stream shape captured from Epomaker's driver (fullscreen2.pcapng).
+        // Init and stream shape captured from Epomaker's driver (keybored's fullscreen2.pcapng).
         assert_eq!(hex(&r[0]), format!("a500010000ae00ab000040ac0000010001{}", "00".repeat(47)));
         assert_eq!(r.len(), 1 + 1966);
         assert_eq!(&r[1][..12], &[0x25, 0, 1, 0, 0, 0, 0x38, 0xA1, 0xF8, 0, 0xF8, 0]);
         assert!(r[1..1966].iter().all(|x| x[6] == 0x38));
-        // Last report: seq 1965 = 0x07AD, kind 0x28, 40 pixel bytes then zero padding.
+        // Last report: seq 1965 = 0x07AD, 40 (0x28) pixel bytes then zero padding.
         assert_eq!(&r[1966][..8], &[0x25, 0, 1, 0, 0xAD, 0x07, 0x28, 0xFD]);
         assert!(r[1966][8..48].chunks(2).all(|p| p == [0xF8, 0x00]));
         assert!(r[1966][48..].iter().all(|&b| b == 0));
     }
 
     #[test]
-    fn animations_keep_compact_header() {
-        let anim = Animation { width: 192, height: 128, delay_ms: 66, frames: vec![vec![0; 192 * 128 * 2]; 2] };
-        assert!(!anim.is_extended());
+    fn animation_frames_are_indexed_and_counted() {
+        let len = 320 * 172 * 2;
+        let anim = Animation { width: 320, height: 172, delay_ms: 66, frames: vec![vec![0; len]; 3] };
         let r = anim.reports().unwrap();
-        assert!(r[0][12..].iter().all(|&b| b == 0));
-        // Too big for the compact header and not a still: rejected.
-        let big = Animation { width: 320, height: 128, delay_ms: 66, frames: vec![vec![0; 320 * 128 * 2]; 2] };
-        assert!(big.reports().is_err());
+        // One prepare for the whole animation: frame count 3, delay 66.
+        assert_eq!(&r[0][..4], &[0xA5, 0, 3, 66]);
+        assert_eq!(r.len(), 1 + 3 * 1966);
+        // Frame 2's first chunk: index 2 of 3, chunk counter back at 0.
+        let f2 = &r[1 + 2 * 1966];
+        assert_eq!(&f2[..7], &[0x25, 2, 3, 66, 0, 0, 56]);
+    }
+
+    #[test]
+    fn prepare_reply() {
+        assert_eq!(prepare_accepted(&[0xA5, 1, 0]), Some(true));
+        assert_eq!(prepare_accepted(&[0xA5, 0, 0]), Some(false));
+        assert_eq!(prepare_accepted(&[0x00; 64]), None);
     }
 
     #[test]

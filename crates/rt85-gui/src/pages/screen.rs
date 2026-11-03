@@ -25,6 +25,7 @@ pub enum Message {
     Upload,
     Clear,
     SyncTime,
+    ToggleLanguage,
     CpuFeed(bool),
     TempFeed(bool),
     LiveMode(usize),
@@ -259,6 +260,7 @@ impl Page {
             }
             Message::Clear => return Output::Job(Job::ClearScreen, fl!("clearing")),
             Message::SyncTime => return Output::Job(Job::SyncTime, fl!("syncing-time")),
+            Message::ToggleLanguage => return Output::Job(Job::ToggleLanguage, fl!("switching-language")),
             Message::CpuFeed(v) => self.cpu_feed = v,
             Message::TempFeed(v) => self.temp_feed = v,
             Message::LiveMode(i) => {
@@ -344,18 +346,26 @@ impl Page {
             preview_col = preview_col.push(widget::text::caption(p.summary.clone()));
         }
         let can_upload = idle && self.prepared.is_some() && (caps.screen_rgb565 || caps.screen_qgif);
-        let actions = widget::row::with_children(vec![
-            widget::button::suggested(fl!("upload")).on_press_maybe(can_upload.then_some(Message::Upload)).into(),
-            widget::button::destructive(fl!("clear-screen"))
-                .on_press_maybe((idle && caps.screen_clear).then_some(Message::Clear))
-                .into(),
-        ])
-        .spacing(space.space_xs);
+        let mut actions = widget::row::with_capacity(2)
+            .push(widget::button::suggested(fl!("upload")).on_press_maybe(can_upload.then_some(Message::Upload)))
+            .spacing(space.space_xs);
+        // Not offered on the RT85, where the "clear" command erases flash.
+        if caps.screen_clear || !ctx.connected {
+            actions = actions.push(
+                widget::button::destructive(fl!("clear-screen")).on_press_maybe((idle && caps.screen_clear).then_some(Message::Clear)),
+            );
+        }
 
         let mut widgets = widget::settings::section().title(fl!("widgets")).add(widget::settings::item(
             fl!("clock"),
             widget::button::standard(fl!("sync-now")).on_press_maybe((idle && caps.time_sync).then_some(Message::SyncTime)),
         ));
+        if caps.screen_language {
+            widgets = widgets.add(widget::settings::item(
+                fl!("screen-language"),
+                widget::button::standard(fl!("switch-language")).on_press_maybe(idle.then_some(Message::ToggleLanguage)),
+            ));
+        }
         if caps.telemetry {
             widgets = widgets
                 .add(widget::settings::item(fl!("cpu-feed"), widget::toggler(self.cpu_feed).on_toggle(Message::CpuFeed)))

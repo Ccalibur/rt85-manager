@@ -8,7 +8,7 @@ use rt85_protocol::{
     ids::{Link, Platform},
     rdmctmzt::Qgif,
     layout::Board,
-    royuan::{keys::RgbFrame, lighting::Profile, screen::{self, Animation, ScreenSpec}},
+    royuan::{Family, gen2::Identity, keys::RgbFrame, lighting::Profile, screen::{self, Animation, ScreenSpec}},
     time::DateTime,
 };
 
@@ -26,6 +26,10 @@ pub struct Capabilities {
     pub screen_clear: bool,
     /// Size of the uploadable image area, when known.
     pub screen: Option<ScreenSpec>,
+    /// Royuan command set (decides the lighting effects on offer).
+    pub family: Option<Family>,
+    /// Screen language switch (gen2).
+    pub screen_language: bool,
 }
 
 impl Capabilities {
@@ -33,21 +37,28 @@ impl Capabilities {
     /// RT85 and some RT100 batches share a USB ID.
     pub fn for_device(platform: Platform, board: Board) -> Self {
         match platform {
-            Platform::Royuan => Capabilities {
-                lighting_modes: true,
-                per_key_rgb: true,
-                remap: true,
-                time_sync: true,
-                telemetry: true,
-                screen_rgb565: true,
-                screen_qgif: false,
-                screen_clear: true,
-                screen: Some(screen::spec_for(board)),
-            },
+            Platform::Royuan => {
+                let gen2 = board.family() == Family::Gen2;
+                Capabilities {
+                    lighting_modes: true,
+                    per_key_rgb: true,
+                    remap: true,
+                    time_sync: true,
+                    // The RT85 has no system-info page, and its 0xAC erases flash.
+                    telemetry: !gen2,
+                    screen_rgb565: true,
+                    screen_qgif: false,
+                    screen_clear: !gen2,
+                    screen: Some(screen::spec_for(board)),
+                    family: Some(board.family()),
+                    screen_language: gen2,
+                }
+            }
             Platform::Rdmctmzt => Capabilities {
                 time_sync: true,
                 screen_qgif: true,
-                screen: Some(ScreenSpec { width: 240, height: 135 }),
+                // QGIF files carry their own frames; only the size is used here.
+                screen: Some(ScreenSpec { width: 240, height: 135, max_frames: 0, animation_align: 1 }),
                 ..Default::default()
             },
         }
@@ -60,16 +71,17 @@ pub enum Keyboard {
 }
 
 impl Keyboard {
-    pub fn open(api: &HidApi, dev: &FoundDevice) -> Result<Self> {
+    /// Open the keyboard, speaking `board`'s command set.
+    pub fn open(api: &HidApi, dev: &FoundDevice, board: Board) -> Result<Self> {
         let iface = dev.config_interface().ok_or(Error::NotFound)?;
-        Self::open_path(api, dev, &iface.path)
+        Self::open_path(api, dev, &iface.path, board)
     }
 
     /// Open a specific interface (to try another one when probing).
-    pub fn open_path(api: &HidApi, dev: &FoundDevice, path: &std::ffi::CStr) -> Result<Self> {
+    pub fn open_path(api: &HidApi, dev: &FoundDevice, path: &std::ffi::CStr, board: Board) -> Result<Self> {
         Ok(match dev.platform {
             Platform::Royuan => {
-                let mut kb = RoyuanKeyboard::open(api, path)?;
+                let mut kb = RoyuanKeyboard::open(api, path, board.family())?;
                 if dev.link() == Link::Dongle && !kb.wireless_init()? {
                     tracing::warn!("keyboard did not answer the 2.4 GHz wake-up sequence");
                 }
@@ -85,6 +97,22 @@ impl Keyboard {
             Keyboard::Rdmctmzt(_) => Platform::Rdmctmzt,
         };
         Capabilities::for_device(platform, board)
+    }
+
+    /// Ask a Royuan board which model it is (command `0x8F`). Several
+    /// boards share one USB ID, so this is how the RT85 is told apart.
+    pub fn identify(&mut self) -> Result<Option<Identity>> {
+        match self {
+            Keyboard::Royuan(k) => k.identify(),
+            Keyboard::Rdmctmzt(_) => Ok(None),
+        }
+    }
+
+    /// Switch command set after identifying the board.
+    pub fn set_board(&mut self, board: Board) {
+        if let Keyboard::Royuan(k) = self {
+            k.set_family(board.family());
+        }
     }
 
 
@@ -135,5 +163,9 @@ impl Keyboard {
 
     pub fn set_temperature(&mut self, celsius: u8) -> Result<()> {
         self.royuan("temperature widget")?.set_temperature(celsius)
+    }
+
+    pub fn toggle_language(&mut self) -> Result<()> {
+        self.royuan("the screen language switch")?.toggle_language()
     }
 }

@@ -11,8 +11,8 @@
 </p>
 
 > [!WARNING]
-> **Experimental.** The keyboard protocol is ported from reverse-engineered work on
-> sibling boards (RT100 and RT82) and on the RT85's 320×172 screen (see
+> **Experimental.** The RT85 support is built from other projects' analyses of
+> Epomaker's own driver and a USB capture of its screen upload (see
 > [`docs/protocol.md`](docs/protocol.md)). It hasn't been tested by this project on an
 > RT85 yet. If you own one, please open an issue with the output of `rt85 list --all`.
 
@@ -24,9 +24,9 @@
 |---|---|
 | ![Lighting page: effect mode, speed, brightness, direction and colour](docs/screenshots/lighting.png) | ![Keys page: the RT85's 75% board with square keycaps and a rainbow of per-key colours](docs/screenshots/keys.png) |
 | **Macros** | **Screen** |
-| ![Macros page: a list of macros, each assigned to a key, with key, text and delay steps](docs/screenshots/macros.png) | ![Screen page: image preview, upload, clock, CPU/temperature widgets and live screen](docs/screenshots/screen.png) |
+| ![Macros page: a list of macros, each assigned to a key, with key, text and delay steps](docs/screenshots/macros.png) | ![Screen page: 320×172 image preview, upload, clock sync, screen language switch and live screen](docs/screenshots/screen.png) |
 | **Settings** | **Device** |
-| ![Settings page: keyboard layout, colour scheme and frosted glass](docs/screenshots/settings.png) | ![Device page: connected keyboard, platform and capabilities](docs/screenshots/device.png) |
+| ![Settings page: keyboard layout, colour scheme and frosted glass](docs/screenshots/settings.png) | ![Device page: connected RT85, platform, model and capabilities](docs/screenshots/device.png) |
 
 **Live screen:** what the RT85's 320×172 screen shows for now playing, now playing + FPS, and game FPS.
 
@@ -34,14 +34,14 @@
 
 ## Features
 
-- **Lighting:** 19 built-in effects with speed, brightness, direction, colour and rainbow mode
-- **Per-key RGB:** paint keys on a clickable layout and send them to the keyboard
+- **Lighting:** the RT85's 22 built-in effects (19 on the RT100) with speed, brightness, direction, colour and rainbow mode
+- **Per-key RGB:** paint keys on a clickable layout and send them to the keyboard (stored as the RT85's first user picture)
 - **Key remapping:** pick a key and choose what it sends
-- **Screen:** upload images and animated GIFs (fill, fit or stretch), clear the screen
-- **Screen widgets:** sync the clock, stream live CPU usage and temperature
+- **Screen:** upload images and full-screen animated GIFs (fill, fit or stretch); clear the screen on the RT100
+- **Screen widgets:** sync the clock, switch the RT85's screen language; stream CPU usage and temperature on the RT100
 - **Macros:** key, text and delay steps on any key. A key is remapped to a spare F13–F24 code, and the app types the macro (via `/dev/uinput`) while it is running; the firmware's own macro memory isn't reverse-engineered yet
 - **Live screen:** now-playing media from MPRIS (cover art, title, time bar) and game FPS from MangoHud, drawn onto the screen
-- **Layouts:** the RT85's 75% board in US ANSI or UK ISO (asked on first run); the RT100 board when one is detected
+- **Layouts:** the RT85's 75% board in US ANSI or UK ISO (asked on first run), with its real key slots; the RT100 board when one is detected. The keyboard is asked which model it is, since several share one USB ID
 - **Desktop integration:** follows the COSMIC theme or the KDE colour scheme, optional frosted glass, window controls on KDE/GNOME
 - **CLI:** everything above, scriptable, plus raw packets for protocol probing (`--layout ansi|iso`)
 

@@ -3,6 +3,6 @@
   [{"y": 0.25}, "BACKQUOTE", "NUMROW_1", "NUMROW_2", "NUMROW_3", "NUMROW_4", "NUMROW_5", "NUMROW_6", "NUMROW_7", "NUMROW_8", "NUMROW_9", "NUMROW_0", "NUMROW_MINUS", "NUMROW_EQUAL", {"w": 2}, "BACKSPACE", {"x": 0.25}, "HOME"],
   [{"w": 1.5}, "TAB", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "OPEN_SQBR", "CLOSE_SQBR", {"x": 0.25, "w": 1.25, "h": 2}, "ENTER", {"x": 0.25}, "PGUP"],
   [{"w": 1.75}, "CAPS", "A", "S", "D", "F", "G", "H", "J", "K", "L", "SEMICOLON", "QUOTE", "HASH", {"x": 1.5}, "PGDOWN"],
-  [{"w": 1.25}, "LEFT_SHIFT", "BACKSLASH", "Z", "X", "C", "V", "B", "N", "M", "COMMA", "DOT", "SLASH", {"w": 1.75}, "RIGHT_SHIFT", {"x": 0.25}, "UP", "END"],
+  [{"w": 1.25}, "LEFT_SHIFT", "BACKSLASH", "Z", "X", "C", "V", "B", "N", "M", "COMMA", "DOT", "SLASH", {"w": 1.75}, "RIGHT_SHIFT", {"x": 0.25}, "UP", "PRTSC"],
   [{"w": 1.25}, "LEFT_CTRL", {"w": 1.25}, "LEFT_WIN", {"w": 1.25}, "LEFT_ALT", {"w": 6.25}, "SPACE", "RIGHT_ALT", "FN", "RIGHT_CTRL", {"x": 0.25}, "LEFT", "DOWN", "RIGHT"]
 ]

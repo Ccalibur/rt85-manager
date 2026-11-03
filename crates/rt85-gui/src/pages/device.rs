@@ -34,6 +34,7 @@ pub fn view<'a>(devices: &'a [DeviceSummary], active: Option<usize>, ctx: &Ctx, 
             .title(fl!("details"))
             .add(widget::settings::item(fl!("platform"), widget::text::body(format!("{:?}", d.platform))))
             .add(widget::settings::item(fl!("model"), widget::text::body(d.model.unwrap_or("?").to_owned())))
+            .add_maybe(d.firmware.clone().map(|f| widget::settings::item(fl!("firmware"), widget::text::body(f))))
             .add(widget::settings::item(fl!("manufacturer"), widget::text::body(d.manufacturer.clone())))
             .add(widget::settings::item(fl!("connection"), widget::text::body(format!("{:?}", d.link))))
             .add(widget::settings::item(fl!("tab-colors"), widget::text::body(yes_no(c.per_key_rgb))))

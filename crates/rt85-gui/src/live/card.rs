@@ -268,7 +268,7 @@ mod tests {
             ("fps", None, Some(&fps)),
             ("idle", None, None),
         ] {
-            let rt85_protocol::royuan::screen::ScreenSpec { width, height } = rt85_protocol::royuan::screen::RT85_SCREEN;
+            let rt85_protocol::royuan::screen::ScreenSpec { width, height, .. } = rt85_protocol::royuan::screen::RT85_SCREEN;
             render(width.into(), height.into(), m, f, accent).rgba.save(dir.join(format!("{name}.png"))).unwrap();
             render(162, 173, m, f, accent).rgba.save(dir.join(format!("{name}-rt100.png"))).unwrap();
         }

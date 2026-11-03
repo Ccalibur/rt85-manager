@@ -105,6 +105,23 @@ impl Board {
             _ => Board::Rt85,
         }
     }
+
+    /// The board for an internal model ID from the identify command.
+    pub fn for_device_id(id: u32) -> Option<Self> {
+        match id {
+            crate::royuan::gen2::RT85_ID => Some(Board::Rt85),
+            crate::royuan::gen2::RT100_ID => Some(Board::Rt100),
+            _ => None,
+        }
+    }
+
+    /// The command set the board speaks.
+    pub fn family(self) -> crate::royuan::Family {
+        match self {
+            Board::Rt85 => crate::royuan::Family::Gen2,
+            Board::Rt100 => crate::royuan::Family::Yc500,
+        }
+    }
 }
 
 impl std::str::FromStr for Board {
@@ -262,6 +279,7 @@ pub fn default_usage(name: &str) -> Option<u8> {
         "DEL" => 0x4C,
         "HOME" => 0x4A,
         "END" => 0x4D,
+        "PRTSC" => 0x46,
         "PGUP" => 0x4B,
         "PGDOWN" => 0x4E,
         "UP" => 0x52,
@@ -332,7 +350,7 @@ mod tests {
             assert_eq!((w, h), (16.25, 6.25), "{}", l.name);
             // Nav column lines up.
             let x = l.key("DEL").unwrap().x;
-            for k in ["HOME", "PGUP", "PGDOWN", "END", "RIGHT"] {
+            for k in ["HOME", "PGUP", "PGDOWN", "PRTSC", "RIGHT"] {
                 assert_eq!(l.key(k).unwrap().x, x, "{k} in {}", l.name);
             }
             assert_eq!(l.key("UP").unwrap().x, l.key("DOWN").unwrap().x);

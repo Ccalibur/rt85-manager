@@ -10,8 +10,7 @@ use rt85_protocol::{
     rdmctmzt::Qgif,
     royuan::{
         keys::RgbFrame,
-        lighting::{Direction, MAX_BRIGHTNESS, MAX_SPEED, Mode, Profile},
-        screen::ScreenSpec,
+        lighting::{self, MAX_BRIGHTNESS, Profile},
     },
 };
 use std::{io::Write, path::PathBuf};
@@ -49,8 +48,9 @@ enum Cmd {
     Time,
     /// Set the built-in lighting effect.
     Lighting {
-        #[arg(long, value_parser = parse_mode, default_value = "always-on")]
-        mode: Mode,
+        /// Effect name, see `rt85 modes` (the RT85 and RT100 have different ones).
+        #[arg(long)]
+        mode: Option<String>,
         #[arg(long, default_value_t = 4)]
         speed: u8,
         #[arg(long, default_value_t = 4)]
@@ -61,11 +61,11 @@ enum Cmd {
         /// Rainbow colours instead of --color.
         #[arg(long)]
         dazzle: bool,
-        /// Effect direction 0-3 (meaning depends on the mode).
-        #[arg(long, default_value_t = 0)]
-        direction: u8,
+        /// Effect option, counting from 0: direction, picture number, ... (see `rt85 modes`).
+        #[arg(long, alias = "direction", default_value_t = 0)]
+        option: u8,
     },
-    /// List the lighting modes.
+    /// List the lighting modes of the board (--board, default rt85).
     Modes,
     /// Set every key to one colour (per-key RGB).
     Color {
@@ -89,12 +89,14 @@ enum Cmd {
         fit: FitArg,
         /// Override the screen size as WxH (e.g. 240x135).
         #[arg(long, value_parser = parse_size)]
-        size: Option<ScreenSpec>,
+        size: Option<(u16, u16)>,
     },
     /// Upload a pre-encoded QGIF file (RDMCTMZT boards).
     Qgif { file: PathBuf },
-    /// Clear the uploaded image.
+    /// Clear the uploaded image (RT100 only; refused on the RT85, where the command erases flash).
     Clear,
+    /// Switch the screen's language (RT85; each use flips it).
+    Language,
     /// Show a number on the CPU widget.
     Cpu { percent: u8 },
     /// Show a number on the temperature widget.
@@ -127,14 +129,16 @@ fn main() -> Result<()> {
     match &cli.cmd {
         Cmd::List { all } => return list(&mut api, *all),
         Cmd::Modes => {
-            for m in Mode::ALL {
-                println!("{:<20} {}", mode_arg(*m), m.label());
+            let family = cli.board.unwrap_or_default().family();
+            for e in lighting::effects(family) {
+                let options = if e.options.is_empty() { String::new() } else { format!("  options: {}", e.options.join(", ")) };
+                println!("{:<20} {}{options}", e.slug(), e.label);
             }
             return Ok(());
         }
         Cmd::Keys => {
             let l = Layout::for_board(cli.board.unwrap_or_default(), physical);
-            println!("# {} (reference layout; RT85 indices may differ)", l.name);
+            println!("# {} (slot numbers; RT85 ones are from Epomaker's default key map)", l.name);
             for k in &l.keys {
                 println!("{:>3}  {:<16} {}", k.index, k.name, k.label);
             }
@@ -144,6 +148,7 @@ fn main() -> Result<()> {
     }
 
     let found = select(&mut api, cli.device)?;
+    let guess = cli.board.unwrap_or_else(|| Board::for_model(found.known.map(|k| k.model)));
     let mut kb = match cli.interface {
         Some(n) => {
             let iface = found
@@ -151,12 +156,19 @@ fn main() -> Result<()> {
                 .iter()
                 .find(|i| i.number == n)
                 .ok_or_else(|| anyhow!("interface {n} not found"))?;
-            Keyboard::open_path(&api, &found, &iface.path)?
+            Keyboard::open_path(&api, &found, &iface.path, guess)?
         }
-        None => Keyboard::open(&api, &found)?,
+        None => Keyboard::open(&api, &found, guess)?,
     };
-    eprintln!("Using {} ({:04x}:{:04x}, {:?})", found.display_name(), found.vid, found.pid, found.platform);
-    let board = cli.board.unwrap_or_else(|| Board::for_model(found.known.map(|k| k.model)));
+    // Several boards share 3151:5002; ask the keyboard which one it is.
+    let identity = if found.link() == rt85_protocol::ids::Link::Wired { kb.identify().ok().flatten() } else { None };
+    let board = cli.board.or_else(|| identity.and_then(|i| Board::for_device_id(i.device_id))).unwrap_or(guess);
+    kb.set_board(board);
+    let who = match identity {
+        Some(i) => format!(", model id {} firmware {}", i.device_id, i.firmware_string()),
+        None => String::new(),
+    };
+    eprintln!("Using {} ({:04x}:{:04x}, {:?}{who}) as {board:?}", found.display_name(), found.vid, found.pid, found.platform);
     let caps = kb.capabilities(board);
 
     match cli.cmd {
@@ -165,18 +177,25 @@ fn main() -> Result<()> {
             kb.set_time(&mut api, now)?;
             println!("Clock set to {:04}-{:02}-{:02} {:02}:{:02}:{:02}", now.year, now.month, now.day, now.hour, now.minute, now.second);
         }
-        Cmd::Lighting { mode, speed, brightness, color, dazzle, direction } => {
-            if speed > MAX_SPEED || brightness > MAX_BRIGHTNESS {
-                bail!("speed is 0-{MAX_SPEED}, brightness is 0-{MAX_BRIGHTNESS}");
+        Cmd::Lighting { mode, speed, brightness, color, dazzle, option } => {
+            let family = board.family();
+            let max_speed = lighting::max_speed(family);
+            if speed > max_speed || brightness > MAX_BRIGHTNESS {
+                bail!("speed is 0-{max_speed}, brightness is 0-{MAX_BRIGHTNESS}");
             }
-            let direction = match direction {
-                0 => Direction::D0,
-                1 => Direction::D1,
-                2 => Direction::D2,
-                3 => Direction::D3,
-                _ => bail!("direction is 0-3"),
+            let effect = match mode {
+                Some(m) => lighting::effects(family)
+                    .iter()
+                    .find(|e| e.slug() == m.to_lowercase())
+                    .ok_or_else(|| anyhow!("unknown mode {m:?} for the {board:?}; see `rt85 modes --board ...`"))?,
+                None => &lighting::effects(family)[0],
             };
-            kb.set_profile(&Profile { mode, speed, brightness, dazzle, direction, rgb: color })?;
+            let options = effect.options.len();
+            if option > 0 && option as usize >= options {
+                bail!("{} takes options 0-{}", effect.label, options.saturating_sub(1));
+            }
+            kb.set_profile(&Profile { effect: effect.id, speed, brightness, dazzle, option, rgb: color })?;
+            println!("Lighting set to {}", effect.label);
         }
         Cmd::Color { color } => {
             let n = Layout::for_board(board, physical).keys.iter().map(|k| k.index as usize + 1).max().unwrap_or(0);
@@ -198,7 +217,8 @@ fn main() -> Result<()> {
             println!("Key {index} → {} (0x{code:02x})", keycode::name(code).unwrap_or("?"));
         }
         Cmd::Upload { file, fit, size } => {
-            let spec = size.or(caps.screen).ok_or_else(|| anyhow!("screen size unknown; pass --size"))?;
+            let spec = caps.screen.ok_or_else(|| anyhow!("this keyboard has no RGB565 screen"))?;
+            let spec = size.map_or(spec, |(w, h)| spec.with_size(w, h));
             let fit = match fit {
                 FitArg::Cover => media::Fit::Cover,
                 FitArg::Contain => media::Fit::Contain,
@@ -215,6 +235,7 @@ fn main() -> Result<()> {
             eprintln!();
         }
         Cmd::Clear => kb.clear_screen()?,
+        Cmd::Language => kb.toggle_language()?,
         Cmd::Cpu { percent } => kb.set_cpu(percent)?,
         Cmd::Temp { celsius } => kb.set_temperature(celsius)?,
         Cmd::Raw { hex, read } => {
@@ -226,10 +247,14 @@ fn main() -> Result<()> {
             r[..bytes.len()].copy_from_slice(&bytes);
             match &mut kb {
                 Keyboard::Royuan(k) => {
-                    k.send(&r)?;
+                    if r[0] == 0xAC && board.family() == rt85_protocol::royuan::Family::Gen2 {
+                        bail!("refusing to send 0xAC: on the RT85 it erases flash");
+                    }
                     if read {
-                        let reply = k.poll()?;
+                        let reply = k.exchange(&r)?;
                         println!("{}", reply.iter().map(|b| format!("{b:02x}")).collect::<String>());
+                    } else {
+                        k.send(&r)?;
                     }
                 }
                 Keyboard::Rdmctmzt(k) => k.send_raw_kbd(&api, &r)?,
@@ -283,18 +308,6 @@ fn progress_bar(done: usize, total: usize) {
     }
 }
 
-fn mode_arg(m: Mode) -> String {
-    m.label().to_lowercase().replace(' ', "-")
-}
-
-fn parse_mode(s: &str) -> Result<Mode, String> {
-    Mode::ALL
-        .iter()
-        .copied()
-        .find(|m| mode_arg(*m) == s.to_lowercase())
-        .ok_or_else(|| format!("unknown mode {s:?}; see `rt85 modes`"))
-}
-
 fn parse_rgb(s: &str) -> Result<(u8, u8, u8), String> {
     let s = s.trim_start_matches('#');
     if s.len() != 6 {
@@ -310,9 +323,9 @@ fn parse_vid_pid(s: &str) -> Result<(u16, u16), String> {
     Ok((h(v)?, h(p)?))
 }
 
-fn parse_size(s: &str) -> Result<ScreenSpec, String> {
+fn parse_size(s: &str) -> Result<(u16, u16), String> {
     let (w, h) = s.split_once('x').ok_or("expected WxH")?;
-    Ok(ScreenSpec { width: w.parse().map_err(|_| "bad width")?, height: h.parse().map_err(|_| "bad height")? })
+    Ok((w.parse().map_err(|_| "bad width")?, h.parse().map_err(|_| "bad height")?))
 }
 
 fn parse_num(s: &str) -> Option<u8> {
