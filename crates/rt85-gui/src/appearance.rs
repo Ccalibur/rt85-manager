@@ -134,7 +134,7 @@ impl Prefs {
             2 => Scheme::Dark,
             _ => Scheme::System,
         };
-        let keyboard_layout = match c.get::<String>("keyboard-layout").ok().as_deref() {
+        let keyboard_layout = match c.get::<Option<String>>("keyboard-layout").ok().flatten().as_deref() {
             Some("ansi") => Some(Physical::Ansi),
             Some("iso") => Some(Physical::Iso),
             _ => None,
