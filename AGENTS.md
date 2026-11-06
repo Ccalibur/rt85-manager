@@ -161,6 +161,13 @@ waits for the ACL, and re-enumerates. The GUI tries once per process; Rescan
 allows another try. The CLI does the same before opening a device, and
 `rt85 setup-udev` runs it explicitly.
 
+Automatic setup only asks for the password when the installed rule is missing
+or differs from the embedded one, which also upgrades an old rule after a new
+vendor is added. If the current rule is installed but the nodes are still
+inaccessible, it returns a "replug the keyboard" hint instead of prompting
+again. Only `rt85 setup-udev` reloads udev in that case. Keep it that way,
+or every scan and CLI command would ask for the password.
+
 The rule is embedded with `include_str!` from
 `resources/udev/70-epomaker-rt85.rules`. When adding a board with a new USB
 vendor ID, update the rule **and** the test in `permissions.rs` that checks the
@@ -281,6 +288,3 @@ Normal output goes to stdout, hints and errors to stderr.
 - The automatic udev setup (`permissions.rs`) is on `testing` and untested
   on hardware.
 - Releases ship the AppImage and the tarball only; no Flatpak.
-- Known issue: if the rule is installed but a node is still inaccessible
-  (e.g. the keyboard needs a replug), each Rescan and each CLI command asks
-  for the password again just to reload udev.

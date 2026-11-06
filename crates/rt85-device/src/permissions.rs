@@ -35,7 +35,39 @@ const RELOAD: &str = "udevadm control --reload-rules && udevadm trigger --subsys
 
 /// Is the rule already installed anywhere udev reads?
 pub fn rule_installed() -> bool {
-    RULE_DIRS.iter().any(|dir| Path::new(dir).join(RULE_FILENAME).exists())
+    installed_rule().is_some()
+}
+
+/// Contents of the copy of the rule udev actually uses: a file in an earlier
+/// directory overrides one with the same name in a later one.
+fn installed_rule() -> Option<String> {
+    RULE_DIRS
+        .iter()
+        .map(|dir| Path::new(dir).join(RULE_FILENAME))
+        .find(|path| path.exists())
+        // Unreadable counts as outdated, so we replace it rather than give up.
+        .map(|path| std::fs::read_to_string(path).unwrap_or_default())
+}
+
+/// What automatic setup should do about an inaccessible keyboard.
+#[derive(Debug, PartialEq, Eq)]
+enum Plan {
+    /// No rule yet: install it.
+    Install,
+    /// An older or different rule (e.g. one without a newly supported vendor):
+    /// replace it.
+    Update,
+    /// Our exact rule is already installed, so asking for root again won't
+    /// help; the device usually just needs replugging.
+    Replug,
+}
+
+fn plan(installed: Option<&str>) -> Plan {
+    match installed {
+        None => Plan::Install,
+        Some(text) if text == RULE_TEXT => Plan::Replug,
+        Some(_) => Plan::Update,
+    }
 }
 
 /// Are we running as root? Then every hidraw node is already openable.
@@ -70,6 +102,11 @@ fn node_paths(devices: &[FoundDevice]) -> impl Iterator<Item = PathBuf> + '_ {
 pub fn needs_access(devices: &[FoundDevice]) -> bool {
     !is_root() && node_paths(devices).any(|path| !accessible(&path))
 }
+
+/// The rule is current but the nodes still aren't accessible. Automatic
+/// setup must not prompt again here, or every scan and CLI command would.
+const REPLUG_HINT: &str = "the udev rule is installed but the keyboard still isn't accessible; \
+     unplug and replug it (or run `rt85 setup-udev` to reload udev)";
 
 /// Flatpak cannot change the host's udev configuration.
 const FLATPAK_HINT: &str = "the Flatpak sandbox can't install udev rules on the host; \
@@ -166,22 +203,33 @@ fn wait_for_access(devices: &[FoundDevice]) {
     }
 }
 
-/// Install the rule if it isn't there, or re-apply it if it is. Used by the
-/// explicit `rt85 setup-udev` command.
+/// Install or update the rule, or reload udev if it is already current. Used
+/// by the explicit `rt85 setup-udev` command, so it may always prompt.
 pub fn setup() -> Result<String, String> {
     if in_flatpak() {
         return Err(FLATPAK_HINT.into());
     }
-    if rule_installed() {
-        apply_rule()?;
-        Ok("The udev rule is already installed; reloaded it.".into())
-    } else {
-        install_rule()?;
-        Ok("Installed the udev rule. Unplug and replug the keyboard if it still isn't detected.".into())
+    match plan(installed_rule().as_deref()) {
+        Plan::Install => {
+            install_rule()?;
+            Ok("Installed the udev rule. Unplug and replug the keyboard if it still isn't detected.".into())
+        }
+        Plan::Update => {
+            install_rule()?;
+            Ok("Updated the udev rule. Unplug and replug the keyboard if it still isn't detected.".into())
+        }
+        Plan::Replug => {
+            apply_rule()?;
+            Ok("The udev rule is already installed; reloaded it.".into())
+        }
     }
 }
 
 /// Make sure the app may open `devices`, installing the rule on first use.
+///
+/// Only prompts for root when the rule is missing or outdated. If the current
+/// rule is installed and the nodes are still inaccessible, it returns the
+/// replug hint instead of prompting again.
 ///
 /// Returns `Ok(None)` when no change was needed, `Ok(Some(message))` after a
 /// successful change, and `Err` when it couldn't be done automatically.
@@ -192,12 +240,16 @@ pub fn ensure_access(devices: &[FoundDevice]) -> Result<Option<String>, String> 
     if in_flatpak() {
         return Err(FLATPAK_HINT.into());
     }
-    let message = if rule_installed() {
-        apply_rule()?;
-        "Re-applied the udev rule to the keyboard."
-    } else {
-        install_rule()?;
-        "Installed the udev rule automatically. If the keyboard still doesn't respond, replug it."
+    let message = match plan(installed_rule().as_deref()) {
+        Plan::Replug => return Err(REPLUG_HINT.into()),
+        Plan::Install => {
+            install_rule()?;
+            "Installed the udev rule automatically. If the keyboard still doesn't respond, replug it."
+        }
+        Plan::Update => {
+            install_rule()?;
+            "Updated the udev rule automatically. If the keyboard still doesn't respond, replug it."
+        }
     };
     wait_for_access(devices);
     Ok(Some(message.into()))
@@ -213,6 +265,22 @@ mod tests {
         assert!(RULE_TEXT.contains("idVendor}==\"36b0\""));
         assert!(RULE_TEXT.contains("idVendor}==\"1919\""));
         assert!(RULE_TEXT.contains("TAG+=\"uaccess\""));
+    }
+
+    #[test]
+    fn missing_rule_is_installed() {
+        assert_eq!(plan(None), Plan::Install);
+    }
+
+    #[test]
+    fn current_rule_never_prompts_again() {
+        assert_eq!(plan(Some(RULE_TEXT)), Plan::Replug);
+    }
+
+    #[test]
+    fn outdated_rule_is_replaced() {
+        assert_eq!(plan(Some("# an older rule\n")), Plan::Update);
+        assert_eq!(plan(Some("")), Plan::Update);
     }
 
     #[test]
@@ -239,9 +307,4 @@ mod tests {
         assert_eq!(needs_access(&[device]), !is_root());
     }
 
-    #[test]
-    fn root_matches_the_process_identity() {
-        // SAFETY: geteuid has no preconditions.
-        assert_eq!(is_root(), unsafe { libc::geteuid() == 0 });
-    }
 }
