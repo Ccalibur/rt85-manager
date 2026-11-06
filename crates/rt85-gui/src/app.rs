@@ -110,7 +110,9 @@ impl App {
         self.active.and_then(|i| self.devices.get(i)).map(|d| d.caps).unwrap_or_default()
     }
 
-    fn scan(&mut self) -> Task<Message> {
+    /// Re-enumerate on the worker. `retry_permissions` lets the scan show the
+    /// polkit prompt again after the user cancelled it.
+    fn scan(&mut self, retry_permissions: bool) -> Task<Message> {
         if self.demo {
             return Task::none();
         }
@@ -119,8 +121,19 @@ impl App {
         }
         self.scanning = true;
         let worker = self.worker.clone();
+        let selected = self.active;
         cosmic::task::future(async move {
-            let r = tokio::task::spawn_blocking(move || worker.lock().expect("worker lock").scan())
+            let r = tokio::task::spawn_blocking(move || {
+                // Locked off the UI thread: the scan may wait on the polkit prompt.
+                let mut w = worker.lock().expect("worker lock");
+                if retry_permissions {
+                    w.retry_permissions();
+                }
+                if let Some(i) = selected {
+                    w.select(i);
+                }
+                w.scan()
+            })
                 .await
                 .map_err(|e| e.to_string())
                 .and_then(|r| r.map_err(|e| e.to_string()));
@@ -139,10 +152,14 @@ impl App {
             self.progress = None;
         }
         let worker = self.worker.clone();
+        let selected = self.active;
         cosmic::task::stream(cosmic::iced::stream::channel(64, async move |mut tx: futures::channel::mpsc::Sender<Message>| {
             let mut progress_tx = tx.clone();
             let r = tokio::task::spawn_blocking(move || {
                 let mut w = worker.lock().expect("worker lock");
+                if let Some(i) = selected {
+                    w.select(i);
+                }
                 w.run(job, &mut |d, t| {
                     let _ = progress_tx.try_send(Message::Progress(d, t));
                 })
@@ -301,7 +318,7 @@ impl Application for App {
             theme_source: Source::Builtin,
             system_theme,
         };
-        let mut tasks = vec![app.update_title(), app.scan(), app.apply_appearance()];
+        let mut tasks = vec![app.update_title(), app.scan(false), app.apply_appearance()];
         if app.demo {
             app.devices = vec![crate::demo::device()];
             app.active = Some(0);
@@ -430,7 +447,8 @@ impl Application for App {
                 return self.handle(out, Message::Screen);
             }
             Message::Device(pages::device::Message::Select(i)) => {
-                self.worker.lock().expect("worker lock").select(i);
+                // The worker picks this up on its next job or scan; locking it
+                // here could freeze the UI behind a long upload or the polkit prompt.
                 self.active = Some(i);
                 self.sync_board();
                 let out = self.screen.on_caps_changed(self.caps().screen);
@@ -492,11 +510,8 @@ impl Application for App {
                     return cosmic::iced::window::close(id);
                 }
             }
-            Message::HotplugTick => return self.scan(),
-            Message::Device(pages::device::Message::Rescan) => {
-                self.worker.lock().expect("worker lock").retry_permissions();
-                return self.scan();
-            }
+            Message::HotplugTick => return self.scan(false),
+            Message::Device(pages::device::Message::Rescan) => return self.scan(true),
             Message::Scanned(r) => {
                 self.scanning = false;
                 match r {

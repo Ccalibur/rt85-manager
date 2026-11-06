@@ -146,8 +146,9 @@ The worker mutex can be held for a long time: HID transfers, screen uploads
 (several seconds), and the polkit password prompt during a scan. Therefore:
 
 - **Never call `worker.lock()` inside `App::update` or `view`.** Move the work
-  into a `spawn_blocking` task, or keep the state you need outside the mutex
-  (for example an `AtomicBool`).
+  into a `spawn_blocking` task, or keep the state you need outside the mutex.
+  For example, the selected device lives in `App::active` and is passed to
+  the worker at the start of every scan and job.
 - Check `self.scanning` / `self.busy` before starting device work, as `scan()`
   does.
 
@@ -280,7 +281,6 @@ Normal output goes to stdout, hints and errors to stderr.
 - The automatic udev setup (`permissions.rs`) is on `testing` and untested
   on hardware.
 - Releases ship the AppImage and the tarball only; no Flatpak.
-- Known issue: `app.rs` locks the worker mutex on the UI thread when
-  selecting a device and on Rescan. If a scan is waiting on the polkit prompt,
-  the window freezes until the prompt closes. Fix it per the
-  [GUI ↔ device boundary](#gui--device-boundary) rule.
+- Known issue: if the rule is installed but a node is still inaccessible
+  (e.g. the keyboard needs a replug), each Rescan and each CLI command asks
+  for the password again just to reload udev.
