@@ -60,23 +60,28 @@ The binaries need glibc 2.35 or newer, so they run on **Ubuntu 22.04+**, **Debia
 ### Permissions (automatic)
 
 The keyboard's `/dev/hidraw*` nodes are root-only until a udev rule tags the
-Epomaker boards with `uaccess`. **RT85 Manager installs that rule for you** the
-first time it detects a keyboard: polkit asks for your password once, the
+Epomaker boards with `uaccess`. **RT85 Manager installs that rule for you** (in
+releases after 0.3.0; 0.3.0 and earlier need the manual step below) the first
+time it detects a keyboard: polkit asks for your password once, the
 bundled rule is written to `/etc/udev/rules.d/`, and udev is reloaded and
 triggered. There is no manual file copying or `sudo` step.
 
 The CLI does the same when it needs the device, and `rt85 setup-udev` runs the
-setup explicitly.
+setup explicitly. It only asks for your password again if the installed rule is
+missing or out of date; if the rule is current and the keyboard still isn't
+accessible, unplug and replug it.
 
 If you prefer to manage it yourself, or you use the Flatpak (whose sandbox
-can't write to the host), install it once by hand:
+can't write to the host), print the bundled rule and install it once by hand:
 
 ```sh
-sudo install -Dm644 /usr/share/rt85-manager/70-epomaker-rt85.rules /etc/udev/rules.d/
+rt85 setup-udev --print | sudo tee /etc/udev/rules.d/70-epomaker-rt85.rules
 sudo udevadm control --reload && sudo udevadm trigger   # then replug the keyboard
 ```
 
-The source tree's copy is `resources/udev/70-epomaker-rt85.rules`.
+From the AppImage use `./RT85_Manager-*.AppImage --cli setup-udev --print`, from
+the Flatpak `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager setup-udev --print`.
+The rule is also in the source tree as `resources/udev/70-epomaker-rt85.rules`.
 
 ## Command-line examples
 
@@ -84,6 +89,7 @@ The source tree's copy is `resources/udev/70-epomaker-rt85.rules`.
 $ rt85 list                                   # connected keyboards and their HID interfaces
 $ rt85 list --all                             # every HID device (to find an unrecognised RT85)
 $ rt85 setup-udev                             # install the udev rule now (polkit)
+$ rt85 setup-udev --print                     # print the rule, to install it by hand
 
 $ rt85 modes                                  # list lighting effects
 $ rt85 lighting --mode breathing --speed 3 --color 2bd4c4

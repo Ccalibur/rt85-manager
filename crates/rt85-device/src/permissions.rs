@@ -109,8 +109,8 @@ const REPLUG_HINT: &str = "the udev rule is installed but the keyboard still isn
      unplug and replug it (or run `rt85 setup-udev` to reload udev)";
 
 /// Flatpak cannot change the host's udev configuration.
-const FLATPAK_HINT: &str = "the Flatpak sandbox can't install udev rules on the host; \
-     install resources/udev/70-epomaker-rt85.rules once (see the README), then reopen RT85 Manager";
+const FLATPAK_HINT: &str = "the Flatpak sandbox can't install udev rules on the host; install the rule once \
+     by hand (see the README's Permissions section), then replug the keyboard and reopen RT85 Manager";
 
 fn pkexec_path() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("PATH")

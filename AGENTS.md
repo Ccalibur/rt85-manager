@@ -172,7 +172,8 @@ The rule is embedded with `include_str!` from
 `resources/udev/70-epomaker-rt85.rules`. When adding a board with a new USB
 vendor ID, update the rule **and** the test in `permissions.rs` that checks the
 vendors. Flatpak cannot write host udev rules, so it must keep showing the
-manual fallback.
+manual fallback (`rt85 setup-udev --print`, which works from every install
+type).
 
 ### Settings
 
@@ -285,6 +286,6 @@ Normal output goes to stdout, hints and errors to stderr.
   expected 9–14 Nov 2026. Test on it in this order: `rt85 time` (identify,
   expect model ID 2895), still image upload, GIF, lighting, remap, per-key
   colour.
-- The automatic udev setup (`permissions.rs`) is on `testing` and untested
-  on hardware.
+- The automatic udev setup (`permissions.rs`) is on `main` but not in a
+  release yet (first in the release after 0.3.0), and untested on hardware.
 - Releases ship the AppImage and the tarball only; no Flatpak.

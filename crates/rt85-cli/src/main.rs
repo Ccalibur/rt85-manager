@@ -46,7 +46,12 @@ enum Cmd {
     },
     /// Install (or re-apply) the udev rule so your user can open the keyboard.
     /// Uses polkit, so no sudo or manual file copying is needed.
-    SetupUdev,
+    SetupUdev {
+        /// Print the rule instead of installing it, e.g. to install it by hand:
+        /// `rt85 setup-udev --print | sudo tee /etc/udev/rules.d/70-epomaker-rt85.rules`
+        #[arg(long)]
+        print: bool,
+    },
     /// Sync the keyboard clock to the local time.
     Time,
     /// Set the built-in lighting effect.
@@ -131,7 +136,11 @@ fn main() -> Result<()> {
 
     match &cli.cmd {
         Cmd::List { all } => return list(&mut api, *all),
-        Cmd::SetupUdev => {
+        Cmd::SetupUdev { print: true } => {
+            print!("{}", rt85_device::permissions::RULE_TEXT);
+            return Ok(());
+        }
+        Cmd::SetupUdev { print: false } => {
             let message = rt85_device::permissions::setup().map_err(|e| anyhow!(e))?;
             println!("{message}");
             return Ok(());
@@ -273,7 +282,7 @@ fn main() -> Result<()> {
                 Keyboard::Rdmctmzt(k) => k.send_raw_kbd(&api, &r)?,
             }
         }
-        Cmd::List { .. } | Cmd::SetupUdev | Cmd::Modes | Cmd::Keys => unreachable!(),
+        Cmd::List { .. } | Cmd::SetupUdev { .. } | Cmd::Modes | Cmd::Keys => unreachable!(),
     }
     Ok(())
 }
