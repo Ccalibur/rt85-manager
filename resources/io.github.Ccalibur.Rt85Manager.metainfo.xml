@@ -70,6 +70,17 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.0" date="2026-11-06">
+      <description>
+        <p>No more manual udev step: the app sets up keyboard access itself.</p>
+        <ul>
+          <li>Installs the udev rule through polkit the first time it sees a keyboard, with one password prompt</li>
+          <li>Only asks again if the installed rule is missing or out of date</li>
+          <li>New rt85 setup-udev command, with --print to install the rule by hand</li>
+          <li>The window no longer freezes on Rescan or device switching while the keyboard is busy</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-11-03">
       <description>
         <p>RT85 support built from Epomaker's own driver: its command set, screen and key map.</p>

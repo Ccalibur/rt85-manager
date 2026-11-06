@@ -279,13 +279,13 @@ Normal output goes to stdout, hints and errors to stderr.
 
 *Last updated 2026-11-06. Update the date when you change this section.*
 
-- Version 0.3.0 (released 2026-11-03). The release binaries need glibc 2.35+.
+- Version 0.4.0 (released 2026-11-06). The release binaries need glibc 2.35+.
 - **RT85 gen2 support is untested on hardware.** It is built from other
   projects' analyses (see `docs/protocol.md`); only the screen upload has been
   seen on a real RT85, in someone else's capture. The maintainer's RT85 is
   expected 9–14 Nov 2026. Test on it in this order: `rt85 time` (identify,
   expect model ID 2895), still image upload, GIF, lighting, remap, per-key
   colour.
-- The automatic udev setup (`permissions.rs`) is on `main` but not in a
-  release yet (first in the release after 0.3.0), and untested on hardware.
+- The automatic udev setup (`permissions.rs`) shipped in 0.4.0 and is
+  untested on hardware.
 - Releases ship the AppImage and the tarball only; no Flatpak.

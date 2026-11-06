@@ -49,20 +49,21 @@
 
 Download a package from [Releases](https://github.com/Ccalibur/rt85-manager/releases).
 The binaries need glibc 2.35 or newer, so they run on **Ubuntu 22.04+**, **Debian 12+**,
-**Fedora**, **Arch** and other current distros (x86_64).
+**Fedora**, **Arch** and other current distros (x86_64). Releases ship an AppImage and a
+tarball; a Flatpak can be built from [`packaging/flatpak`](packaging/flatpak) but isn't
+published.
 
 | Package | Install and run |
 |---|---|
-| **Flatpak** | `flatpak install --user ./RT85_Manager-*.flatpak`<br>`flatpak run io.github.Ccalibur.Rt85Manager` |
 | **Tarball** | `sudo tar -xzf rt85-manager-*.tar.gz -C /usr/local --strip-components=1`<br>`rt85-manager` |
 | **AppImage** | `chmod +x RT85_Manager-*.AppImage && ./RT85_Manager-*.AppImage`<br>CLI: `./RT85_Manager-*.AppImage --cli list` |
 
 ### Permissions (automatic)
 
 The keyboard's `/dev/hidraw*` nodes are root-only until a udev rule tags the
-Epomaker boards with `uaccess`. **RT85 Manager installs that rule for you** (in
-releases after 0.3.0; 0.3.0 and earlier need the manual step below) the first
-time it detects a keyboard: polkit asks for your password once, the
+Epomaker boards with `uaccess`. **RT85 Manager installs that rule for you** (from
+0.4.0; 0.3.0 and earlier need the manual step below) the first time it detects
+a keyboard: polkit asks for your password once, the
 bundled rule is written to `/etc/udev/rules.d/`, and udev is reloaded and
 triggered. There is no manual file copying or `sudo` step.
 
@@ -71,7 +72,7 @@ setup explicitly. It only asks for your password again if the installed rule is
 missing or out of date; if the rule is current and the keyboard still isn't
 accessible, unplug and replug it.
 
-If you prefer to manage it yourself, or you use the Flatpak (whose sandbox
+If you prefer to manage it yourself, or you built the Flatpak (whose sandbox
 can't write to the host), print the bundled rule and install it once by hand:
 
 ```sh
@@ -80,7 +81,7 @@ sudo udevadm control --reload && sudo udevadm trigger   # then replug the keyboa
 ```
 
 From the AppImage use `./RT85_Manager-*.AppImage --cli setup-udev --print`, from
-the Flatpak `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager setup-udev --print`.
+a self-built Flatpak `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager setup-udev --print`.
 The rule is also in the source tree as `resources/udev/70-epomaker-rt85.rules`.
 
 ## Command-line examples
@@ -106,8 +107,8 @@ $ rt85 time                                   # sync the clock
 $ rt85 cpu 42 && rt85 temp 55                 # set the widgets by hand
 ```
 
-With the Flatpak, use `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager …`.
-With the AppImage, use `./RT85_Manager-*.AppImage --cli …`.
+With the AppImage, use `./RT85_Manager-*.AppImage --cli …` (or, with a self-built
+Flatpak, `flatpak run --command=rt85 io.github.Ccalibur.Rt85Manager …`).
 
 Ready-made scripts are in [`examples/`](examples): lighting presets, a screen
 slideshow, a CPU/temperature monitor, and systemd user units for hourly clock sync.
@@ -121,11 +122,12 @@ Fedora: `systemd-devel libxkbcommon-devel`).
 just run                 # GUI
 just cli list            # CLI
 just test                # unit tests (packets checked against captured traffic)
-just dist                # release packages into dist/ (AppImage, .flatpak, tarball)
+just dist                # packages into dist/ (AppImage, tarball and a .flatpak)
 ```
 
-`just dist` compiles inside the Freedesktop 24.08 SDK so the binaries don't depend on
-your machine's (possibly newer) glibc. See [`packaging/`](packaging).
+Release binaries are built in an older-glibc environment (the Freedesktop 24.08 SDK via
+`just portable`, or a Debian 12 container) so they don't depend on your machine's
+possibly newer glibc. See [`packaging/`](packaging).
 
 Handy environment variables: `RUST_LOG=rt85=trace` (protocol logging),
 `RT85_DEMO=1` (explore the UI without a keyboard), `RT85_PAGE=0..3` (start on a page).
