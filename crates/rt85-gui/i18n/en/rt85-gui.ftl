@@ -9,7 +9,7 @@ page-settings = Settings
 
 # Status
 no-device = No supported keyboard connected
-no-device-help = Plug the keyboard in over USB. If it still doesn't show up, install the udev rule (see README) so your user can open the HID device, then replug it.
+no-device-help = Plug the keyboard in over USB. RT85 Manager installs the required udev rule automatically the first time it sees it.
 error = Error
 dismiss = Dismiss
 apply = Apply
@@ -139,7 +139,7 @@ macros-enabled-help = While RT85 Manager is open, pressing a macro's key types i
 macros-status = Status
 macros-listening = Listening for macro keys
 macros-unsupported = This keyboard's key remapping isn't supported yet, so macro keys can't be assigned.
-no-key-interface = Couldn't find the keyboard's key input (is the udev rule installed?)
+no-key-interface = Couldn't find the keyboard's key input (try Rescan so the app can re-apply the udev rule)
 macro-default-name = Macro { $n }
 new-macro = New macro
 delete-macro = Delete

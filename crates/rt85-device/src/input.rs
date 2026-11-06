@@ -1,6 +1,7 @@
 //! Watches a keyboard's own key reports (its hidraw nodes) for macro trigger
 //! keys. Reading hidraw doesn't take the keys away from the system, and the
-//! udev rule that lets us configure the board also lets us read it.
+//! udev rule the app installs (or that can be installed by hand) also lets us
+//! read it.
 
 use rt85_protocol::hid_report::KeyboardReports;
 use std::{

@@ -57,20 +57,33 @@ The binaries need glibc 2.35 or newer, so they run on **Ubuntu 22.04+**, **Debia
 | **Tarball** | `sudo tar -xzf rt85-manager-*.tar.gz -C /usr/local --strip-components=1`<br>`rt85-manager` |
 | **AppImage** | `chmod +x RT85_Manager-*.AppImage && ./RT85_Manager-*.AppImage`<br>CLI: `./RT85_Manager-*.AppImage --cli list` |
 
-### Required: udev rule
+### Permissions (automatic)
 
-Without it, only root can talk to the keyboard. Packages can't install it for you:
+The keyboard's `/dev/hidraw*` nodes are root-only until a udev rule tags the
+Epomaker boards with `uaccess`. **RT85 Manager installs that rule for you** the
+first time it detects a keyboard: polkit asks for your password once, the
+bundled rule is written to `/etc/udev/rules.d/`, and udev is reloaded and
+triggered. There is no manual file copying or `sudo` step.
+
+The CLI does the same when it needs the device, and `rt85 setup-udev` runs the
+setup explicitly.
+
+If you prefer to manage it yourself, or you use the Flatpak (whose sandbox
+can't write to the host), install it once by hand:
 
 ```sh
-sudo install -Dm644 resources/udev/70-epomaker-rt85.rules /etc/udev/rules.d/
+sudo install -Dm644 /usr/share/rt85-manager/70-epomaker-rt85.rules /etc/udev/rules.d/
 sudo udevadm control --reload && sudo udevadm trigger   # then replug the keyboard
 ```
+
+The source tree's copy is `resources/udev/70-epomaker-rt85.rules`.
 
 ## Command-line examples
 
 ```console
 $ rt85 list                                   # connected keyboards and their HID interfaces
 $ rt85 list --all                             # every HID device (to find an unrecognised RT85)
+$ rt85 setup-udev                             # install the udev rule now (polkit)
 
 $ rt85 modes                                  # list lighting effects
 $ rt85 lighting --mode breathing --speed 3 --color 2bd4c4

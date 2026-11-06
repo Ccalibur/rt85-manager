@@ -44,6 +44,9 @@ enum Cmd {
         #[arg(long)]
         all: bool,
     },
+    /// Install (or re-apply) the udev rule so your user can open the keyboard.
+    /// Uses polkit, so no sudo or manual file copying is needed.
+    SetupUdev,
     /// Sync the keyboard clock to the local time.
     Time,
     /// Set the built-in lighting effect.
@@ -128,6 +131,11 @@ fn main() -> Result<()> {
 
     match &cli.cmd {
         Cmd::List { all } => return list(&mut api, *all),
+        Cmd::SetupUdev => {
+            let message = rt85_device::permissions::setup().map_err(|e| anyhow!(e))?;
+            println!("{message}");
+            return Ok(());
+        }
         Cmd::Modes => {
             let family = cli.board.unwrap_or_default().family();
             for e in lighting::effects(family) {
@@ -148,6 +156,11 @@ fn main() -> Result<()> {
     }
 
     let found = select(&mut api, cli.device)?;
+    // Do what the GUI does: install the bundled udev rule through polkit when
+    // the HID nodes aren't writable yet.
+    if let Some(notice) = rt85_device::permissions::ensure_access(std::slice::from_ref(&found)).map_err(|e| anyhow!(e))? {
+        eprintln!("{notice}");
+    }
     let guess = cli.board.unwrap_or_else(|| Board::for_model(found.known.map(|k| k.model)));
     let mut kb = match cli.interface {
         Some(n) => {
@@ -260,7 +273,7 @@ fn main() -> Result<()> {
                 Keyboard::Rdmctmzt(k) => k.send_raw_kbd(&api, &r)?,
             }
         }
-        Cmd::List { .. } | Cmd::Modes | Cmd::Keys => unreachable!(),
+        Cmd::List { .. } | Cmd::SetupUdev | Cmd::Modes | Cmd::Keys => unreachable!(),
     }
     Ok(())
 }
@@ -280,7 +293,7 @@ fn list(api: &mut HidApi, all: bool) -> Result<()> {
     }
     let found = rt85_device::list(api)?;
     if found.is_empty() {
-        println!("No supported keyboard found. Try `rt85 list --all` and check permissions (udev rule).");
+        println!("No supported keyboard found. Try `rt85 list --all` and check that it is plugged in.");
     }
     for f in &found {
         let known = f.known.map(|k| k.model).unwrap_or("unknown model");
@@ -291,6 +304,12 @@ fn list(api: &mut HidApi, all: bool) -> Result<()> {
             let usages: Vec<String> = i.usages.iter().map(|(p, u)| format!("{p:04x}:{u:04x}")).collect();
             println!("  {mark} if={} {} usages=[{}]", i.number, i.path.to_string_lossy(), usages.join(" "));
         }
+    }
+    if rt85_device::permissions::needs_access(&found) {
+        println!(
+            "\nThe HID nodes aren't writable by your user. Run `rt85 setup-udev` \
+             (or open RT85 Manager) to install the udev rule automatically."
+        );
     }
     Ok(())
 }

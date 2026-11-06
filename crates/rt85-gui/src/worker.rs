@@ -1,7 +1,7 @@
 //! Owns the HID handle. Every call blocks, so the app runs them on
 //! `spawn_blocking` behind a mutex.
 
-use rt85_device::{Capabilities, FoundDevice, HidApi, Keyboard};
+use rt85_device::{Capabilities, FoundDevice, HidApi, Keyboard, permissions};
 use rt85_protocol::{
     ids::{Link, Platform},
     layout::Board,
@@ -29,6 +29,15 @@ pub struct DeviceSummary {
     /// hidraw node of every interface (the macro listener reads these).
     pub hid_paths: Vec<String>,
     pub caps: Capabilities,
+}
+
+/// Result of re-enumerating the USB bus.
+#[derive(Debug, Clone)]
+pub struct ScanResult {
+    pub devices: Vec<DeviceSummary>,
+    pub active: Option<usize>,
+    /// A message about automatic udev/permission setup, if anything happened.
+    pub permission: Option<Result<String, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,11 +83,26 @@ pub struct Worker {
     identities: Vec<Option<Identity>>,
     active: Option<usize>,
     kb: Option<Keyboard>,
+    /// Only try the polkit prompt once per process; the user can retry with
+    /// "Rescan" if they cancelled it.
+    udev_attempted: bool,
 }
 
 impl Worker {
     pub fn new() -> Self {
-        Self { api: None, found: Vec::new(), identities: Vec::new(), active: None, kb: None }
+        Self {
+            api: None,
+            found: Vec::new(),
+            identities: Vec::new(),
+            active: None,
+            kb: None,
+            udev_attempted: false,
+        }
+    }
+
+    /// Let the next scan try automatic udev setup again (after a cancel).
+    pub fn retry_permissions(&mut self) {
+        self.udev_attempted = false;
     }
 
     fn api(&mut self) -> rt85_device::Result<&mut HidApi> {
@@ -89,9 +113,26 @@ impl Worker {
     }
 
     /// Re-enumerate. Keeps the active device if it is still connected.
-    pub fn scan(&mut self) -> rt85_device::Result<(Vec<DeviceSummary>, Option<usize>)> {
+    pub fn scan(&mut self) -> rt85_device::Result<ScanResult> {
         let prev = self.active.and_then(|i| self.found.get(i)).map(|f| (f.vid, f.pid, f.serial.clone()));
-        let found = rt85_device::list(self.api()?)?;
+        let mut found = rt85_device::list(self.api()?)?;
+
+        // The first time a keyboard is seen, make sure we can open it. The
+        // udev rule is installed through polkit instead of asking the user to
+        // copy it into /etc and reload udev.
+        let mut permission = None;
+        if !self.udev_attempted && !found.is_empty() && permissions::needs_access(&found) {
+            self.udev_attempted = true;
+            match permissions::ensure_access(&found) {
+                Ok(Some(message)) => {
+                    found = rt85_device::list(self.api()?)?;
+                    permission = Some(Ok(message));
+                }
+                Ok(None) => {}
+                Err(e) => permission = Some(Err(e)),
+            }
+        }
+
         let active = prev
             .and_then(|(v, p, s)| found.iter().position(|f| f.vid == v && f.pid == p && f.serial == s))
             .or(if found.is_empty() { None } else { Some(0) });
@@ -113,7 +154,11 @@ impl Worker {
         self.found = found;
         self.identities = identities;
         self.active = active;
-        Ok((self.found.iter().zip(&self.identities).map(|(f, id)| summary(f, *id)).collect(), active))
+        Ok(ScanResult {
+            devices: self.found.iter().zip(&self.identities).map(|(f, id)| summary(f, *id)).collect(),
+            active,
+            permission,
+        })
     }
 
     /// Ask a wired Royuan board for its model ID. Failures just mean we

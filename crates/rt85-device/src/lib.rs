@@ -6,6 +6,7 @@ pub mod error;
 pub mod input;
 pub mod keyboard;
 pub mod media;
+pub mod permissions;
 pub mod rdmctmzt;
 pub mod royuan;
 pub mod uinput;

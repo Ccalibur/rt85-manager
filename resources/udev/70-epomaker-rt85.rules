@@ -1,5 +1,6 @@
 # Lets the logged-in user open Epomaker keyboard HID nodes (no sudo needed).
-# Install:  sudo install -Dm644 70-epomaker-rt85.rules /etc/udev/rules.d/
+# RT85 Manager and `rt85` install this automatically through polkit; to do it
+# by hand:  sudo install -Dm644 70-epomaker-rt85.rules /etc/udev/rules.d/
 #           sudo udevadm control --reload && sudo udevadm trigger   (then replug)
 #
 # Royuan platform (RT85, RT100 and other 3151:xxxx boards)

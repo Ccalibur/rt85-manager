@@ -3,7 +3,7 @@ use crate::{
     fl,
     pages::{self, Ctx, Output},
     telemetry::CpuSampler,
-    worker::{DeviceSummary, Job, Worker},
+    worker::{DeviceSummary, Job, ScanResult, Worker},
 };
 use cosmic::{
     Application, ApplicationExt, Core, Element,
@@ -63,7 +63,7 @@ pub enum Message {
     WindowMinimize,
     WindowMaximize,
     WindowClose,
-    Scanned(Result<(Vec<DeviceSummary>, Option<usize>), String>),
+    Scanned(Result<ScanResult, String>),
     Progress(usize, usize),
     JobDone(Result<String, String>),
     HotplugTick,
@@ -492,14 +492,21 @@ impl Application for App {
                     return cosmic::iced::window::close(id);
                 }
             }
-            Message::Device(pages::device::Message::Rescan) | Message::HotplugTick => return self.scan(),
+            Message::HotplugTick => return self.scan(),
+            Message::Device(pages::device::Message::Rescan) => {
+                self.worker.lock().expect("worker lock").retry_permissions();
+                return self.scan();
+            }
             Message::Scanned(r) => {
                 self.scanning = false;
                 match r {
-                    Ok((devices, active)) => {
+                    Ok(ScanResult { devices, active, permission }) => {
                         self.devices = devices;
                         self.active = active;
                         self.scan_error = None;
+                        if let Some(permission) = permission {
+                            self.status = Some(permission);
+                        }
                     }
                     Err(e) => self.scan_error = Some(e),
                 }
