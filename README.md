@@ -11,10 +11,14 @@
 </p>
 
 > [!WARNING]
-> **Experimental.** The RT85 support is built from other projects' analyses of
-> Epomaker's own driver and a USB capture of its screen upload (see
-> [`docs/protocol.md`](docs/protocol.md)). It hasn't been tested by this project on an
-> RT85 yet. If you own one, please open an issue with the output of `rt85 list --all`.
+> **Experimental, but tested on real hardware.** The app has been tested on a
+> real Epomaker RT85: the features it offers work so far, including lighting,
+> per-key colours, remapping, screen image/animation upload, clock sync, the
+> screen language switch, live screen content and the screen reset (flash
+> erase). The protocol is still reverse-engineered, so behaviour can differ on
+> other models or firmware versions, and the app remains experimental. If
+> something fails on your board, please open an issue with the output of
+> `rt85 list --all`.
 
 ## Screenshots
 
@@ -37,7 +41,7 @@
 - **Lighting:** the RT85's 22 built-in effects (19 on the RT100) with speed, brightness, direction, colour and rainbow mode
 - **Per-key RGB:** paint keys on a clickable layout and send them to the keyboard (stored as the RT85's first user picture)
 - **Key remapping:** pick a key and choose what it sends
-- **Screen:** upload images and full-screen animated GIFs (fill, fit or stretch); clear the screen on the RT100
+- **Screen:** upload images and full-screen animated GIFs (fill, fit or stretch); clear the screen on the RT100, or reset the RT85's screen (erases every uploaded picture and brings the clock dashboard back, up to 90 s)
 - **Screen widgets:** sync the clock, switch the RT85's screen language; stream CPU usage and temperature on the RT100
 - **Macros:** key, text and delay steps on any key. A key is remapped to a spare F13–F24 code, and the app types the macro (via `/dev/uinput`) while it is running; the firmware's own macro memory isn't reverse-engineered yet
 - **Live screen:** now-playing media from MPRIS (cover art, title, time bar) and game FPS from MangoHud, drawn onto the screen
@@ -102,7 +106,8 @@ $ rt85 keys                                   # key names and indices
 
 $ rt85 upload wallpaper.png --fit contain     # still image
 $ rt85 upload cat.gif                         # animation (up to 56 frames)
-$ rt85 clear
+$ rt85 clear                                  # RT100: clear the uploaded image
+$ rt85 clear --erase-flash                    # RT85: erase every picture (~90 s)
 $ rt85 time                                   # sync the clock
 $ rt85 cpu 42 && rt85 temp 55                 # set the widgets by hand
 ```

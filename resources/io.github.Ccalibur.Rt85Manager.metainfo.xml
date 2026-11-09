@@ -70,6 +70,17 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.0" date="2026-11-09">
+      <description>
+        <p>Reset the RT85's screen, now verified on real hardware.</p>
+        <ul>
+          <li>New Reset screen action in the GUI and rt85 clear --erase-flash, with a destructive confirmation</li>
+          <li>Erases every uploaded picture and brings the clock dashboard back (vendor 0xAC flash erase, up to 90 s)</li>
+          <li>Only the guarded reset may send 0xAC to a gen2 board; rt85 raw still refuses it</li>
+          <li>RT85 identify, lighting, remap, per-key colours, image and GIF upload, widgets and screen language confirmed on a real board; support remains experimental</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-11-06">
       <description>
         <p>No more manual udev step: the app sets up keyboard access itself.</p>
