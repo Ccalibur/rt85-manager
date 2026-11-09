@@ -8,6 +8,7 @@ use zbus::{Connection, proxy::CacheProperties, zvariant::OwnedValue};
 pub struct NowPlaying {
     pub title: String,
     pub artist: String,
+    pub album: String,
     pub art_url: Option<String>,
     pub playing: bool,
 }
@@ -72,6 +73,7 @@ async fn player(conn: &Connection, name: &str) -> zbus::Result<Option<NowPlaying
     Ok(Some(NowPlaying {
         title,
         artist,
+        album: text("xesam:album").unwrap_or_default(),
         art_url: text("mpris:artUrl"),
         playing: status == "Playing",
     }))

@@ -1,6 +1,6 @@
-//! Draws the "live" screen image: now-playing card (cover art and song name on
-//! a background taken from the cover) and/or game FPS, at the keyboard
-//! screen's resolution.
+//! Draws the "live" screen image: now-playing card (cover art, song name and a
+//! smaller artist/album line on a background taken from the cover) and/or game
+//! FPS, at the keyboard screen's resolution.
 
 use super::{colors, fps::Reading, mpris::NowPlaying};
 use cosmic_text::{Align, Attrs, Buffer, Color, Ellipsize, EllipsizeHeightLimit, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
@@ -48,15 +48,20 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
             let scheme = art.as_ref().map_or(colors::FALLBACK, |a| a.scheme);
             gradient(&mut img, scheme.top, scheme.bottom);
 
-            // Cover art plus title: stacked on squarish screens (RT100), side
-            // by side on wide ones (RT85, 320x172).
+            // Cover art plus title and a smaller artist/album line: stacked on
+            // squarish screens (RT100), side by side on wide ones (RT85,
+            // 320x172).
             let wide = w as f32 > h as f32 * 1.3;
+            let px = if wide { u(15.0) } else { u(13.0) };
+            let spx = if wide { u(9.0) } else { u(8.0) };
+            let sub = subtitle(m);
+            let gap = u(2.0);
+            let block = px * 1.2 + if sub.is_some() { gap + spx * 1.2 } else { 0.0 };
             let (x0, y0, side) = if wide {
                 let side = (h as f32 - pad * 2.0).max(0.0) as u32;
                 (pad as u32, pad as u32, side)
             } else {
-                let text_h = u(30.0);
-                let side = ((h as f32 - text_h - pad * 2.0).min(w as f32 - pad * 2.0)).max(0.0) as u32;
+                let side = ((h as f32 - block - pad * 2.0).min(w as f32 - pad * 2.0)).max(0.0) as u32;
                 ((w - side) / 2, pad as u32, side)
             };
             match &art {
@@ -73,17 +78,18 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
                 fps_badge(fs, cache, &mut img, f, x0 as f32 + u(4.0), y0 as f32 + u(4.0), u(1.0), accent);
             }
 
-            // Song name only: the artist, play state and progress stay off the
-            // card, so the artwork and its colours carry the design.
-            if wide {
+            // Song name, then the artist and album in a smaller, dimmer line.
+            // Play state and progress stay off the card, so the artwork and its
+            // colours carry the design.
+            let (tx, ty, tw, align) = if wide {
                 let tx = (x0 + side) as f32 + pad * 1.5;
-                let px = u(15.0);
-                let y = (h as f32 - px * 1.2) / 2.0;
-                text(fs, cache, &mut img, &m.title, tx, y, w as f32 - tx - pad, px, true, WHITE, Align::Left);
+                (tx, (h as f32 - block) / 2.0, w as f32 - tx - pad, Align::Left)
             } else {
-                let px = u(13.0);
-                let y = y0 as f32 + side as f32 + u(4.0);
-                text(fs, cache, &mut img, &m.title, pad, y, w as f32 - pad * 2.0, px, true, WHITE, Align::Center);
+                (pad, y0 as f32 + side as f32 + u(4.0), w as f32 - pad * 2.0, Align::Center)
+            };
+            text(fs, cache, &mut img, &m.title, tx, ty, tw, px, true, WHITE, align);
+            if let Some(sub) = sub {
+                text(fs, cache, &mut img, &sub, tx, ty + px * 1.2 + gap, tw, spx, false, DIM, align);
             }
         }
         (None, Some(f)) => {
@@ -109,6 +115,17 @@ fn fps_badge(fs: &mut FontSystem, cache: &mut SwashCache, img: &mut RgbaImage, f
     let (bw, bh) = ((label.len() as f32 * 6.5 + 10.0) * u, 16.0 * u);
     fill(img, x as i32, y as i32, bw as u32, bh as u32, Rgba([0, 0, 0, 190]));
     text(fs, cache, img, &label, x, y + 2.0 * u, bw, 11.0 * u, true, accent, Align::Center);
+}
+
+/// Artist and album for the smaller line under the title; either may be
+/// missing, and the line is dropped when both are.
+fn subtitle(m: &NowPlaying) -> Option<String> {
+    let line = [m.artist.trim(), m.album.trim()]
+        .into_iter()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ");
+    (!line.is_empty()).then_some(line)
 }
 
 /// Two-stop vertical gradient over the whole card.
@@ -239,6 +256,7 @@ mod tests {
         let media = NowPlaying {
             title: "Lagtrain".into(),
             artist: "inabakumori".into(),
+            album: "Anticyclone".into(),
             art_url: std::env::var("RT85_CARD_ART").ok(),
             playing: true,
         };
@@ -256,5 +274,21 @@ mod tests {
             render(width.into(), height.into(), m, f, accent).rgba.save(dir.join(format!("{name}.png"))).unwrap();
             render(162, 173, m, f, accent).rgba.save(dir.join(format!("{name}-rt100.png"))).unwrap();
         }
+    }
+
+    #[test]
+    fn subtitle_joins_artist_and_album() {
+        let mut m = NowPlaying {
+            title: "Lagtrain".into(),
+            artist: "inabakumori".into(),
+            album: "Anticyclone".into(),
+            art_url: None,
+            playing: false,
+        };
+        assert_eq!(subtitle(&m).as_deref(), Some("inabakumori · Anticyclone"));
+        m.album.clear();
+        assert_eq!(subtitle(&m).as_deref(), Some("inabakumori"));
+        m.artist = "  ".into();
+        assert_eq!(subtitle(&m), None);
     }
 }
