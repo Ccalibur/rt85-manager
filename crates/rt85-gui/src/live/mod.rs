@@ -2,6 +2,7 @@
 //! screen.
 
 pub mod card;
+pub mod colors;
 pub mod fps;
 pub mod mpris;
 

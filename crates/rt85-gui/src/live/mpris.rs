@@ -1,7 +1,7 @@
 //! What's playing, from MPRIS players on the session bus (browsers, Spotify,
 //! media players, ...).
 
-use std::{collections::HashMap, sync::OnceLock, time::Duration};
+use std::{collections::HashMap, sync::OnceLock};
 use zbus::{Connection, proxy::CacheProperties, zvariant::OwnedValue};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -9,15 +9,14 @@ pub struct NowPlaying {
     pub title: String,
     pub artist: String,
     pub art_url: Option<String>,
-    pub length: Option<Duration>,
-    pub position: Option<Duration>,
     pub playing: bool,
 }
 
 impl NowPlaying {
-    /// Identifies the track and play state; a change uploads straight away.
-    pub fn key(&self) -> (String, String, bool) {
-        (self.title.clone(), self.artist.clone(), self.playing)
+    /// Identifies the track (title and artist); a change uploads straight
+    /// away. Pausing or resuming on its own doesn't count.
+    pub fn key(&self) -> (String, String) {
+        (self.title.clone(), self.artist.clone())
     }
 }
 
@@ -31,9 +30,9 @@ async fn conn() -> zbus::Result<&'static Connection> {
     Ok(CONN.get_or_init(|| c))
 }
 
-/// The most relevant player: playing beats paused, then the one with more
-/// metadata (Firefox and Plasma's browser integration both report the same
-/// video, but only the latter has artwork and length).
+/// The most relevant player: playing beats paused, then the one with artwork
+/// (Firefox and Plasma's browser integration both report the same video, but
+/// only the latter has artwork).
 pub async fn poll() -> Result<Option<NowPlaying>, String> {
     let conn = conn().await.map_err(|e| e.to_string())?;
     let dbus = zbus::fdo::DBusProxy::new(conn).await.map_err(|e| e.to_string())?;
@@ -42,7 +41,7 @@ pub async fn poll() -> Result<Option<NowPlaying>, String> {
     let mut best: Option<(u8, NowPlaying)> = None;
     for name in names.iter().filter(|n| n.starts_with("org.mpris.MediaPlayer2.")) {
         let Ok(Some(np)) = player(conn, name.as_str()).await else { continue };
-        let score = (np.playing as u8) * 4 + (np.length.is_some() as u8) * 2 + np.art_url.is_some() as u8;
+        let score = (np.playing as u8) * 4 + np.art_url.is_some() as u8;
         if best.as_ref().is_none_or(|(s, _)| score > *s) {
             best = Some((score, np));
         }
@@ -70,26 +69,10 @@ async fn player(conn: &Connection, name: &str) -> zbus::Result<Option<NowPlaying
         .and_then(|v| Vec::<String>::try_from(v.clone()).ok())
         .map(|a| a.into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(", "))
         .unwrap_or_default();
-    let micros = |v: &OwnedValue| {
-        i64::try_from(v.clone())
-            .ok()
-            .or_else(|| u64::try_from(v.clone()).ok().map(|u| u as i64))
-            .filter(|&us| us > 0)
-            .map(|us| Duration::from_micros(us as u64))
-    };
-    let length = meta.get("mpris:length").and_then(micros);
-    let position = proxy
-        .get_property::<OwnedValue>("Position")
-        .await
-        .ok()
-        .and_then(|v| micros(&v))
-        .or(length.map(|_| Duration::ZERO));
     Ok(Some(NowPlaying {
         title,
         artist,
         art_url: text("mpris:artUrl"),
-        length,
-        position,
         playing: status == "Playing",
     }))
 }

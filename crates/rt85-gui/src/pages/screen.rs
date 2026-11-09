@@ -29,7 +29,6 @@ pub enum Message {
     CpuFeed(bool),
     TempFeed(bool),
     LiveMode(usize),
-    LiveRefresh(usize),
     FpsGauge(bool),
     LiveTick,
     LivePolled(Box<Snapshot>),
@@ -64,27 +63,27 @@ pub struct Page {
     live: Live,
 }
 
-/// Title, artist, playing.
-type TrackKey = (String, String, bool);
+/// Title and artist. A change means a new song, even when the title repeats.
+type TrackKey = (String, String);
 
 /// Live screen state.
 struct Live {
     mode: Mode,
     mode_names: Vec<String>,
-    refresh: usize,
-    refresh_names: Vec<String>,
     fps_gauge: bool,
     polling: bool,
     rendering: bool,
     snap: Snapshot,
     preview: Option<widget::image::Handle>,
-    /// Hash and track of the last image sent, and when.
+    /// Hash, track and FPS state of the last image sent, and when.
     sent: Option<(u64, Option<TrackKey>, bool, Instant)>,
+    /// Last rendered card, used to retry a missed upload and refresh the FPS.
+    last: Option<(Arc<Card>, Option<TrackKey>, bool)>,
     setup_error: Option<String>,
 }
 
-/// Seconds between progress refreshes; `None` = only when the track changes.
-const REFRESH: [Option<u64>; 4] = [None, Some(15), Some(30), Some(60)];
+/// How often FPS cards are re-sent. Media cards only change with the track.
+const FPS_REFRESH: Duration = Duration::from_secs(30);
 /// Never upload more often than this, whatever changes.
 const MIN_UPLOAD_GAP: Duration = Duration::from_secs(5);
 
@@ -105,19 +104,13 @@ impl Page {
             live: Live {
                 mode: crate::demo::live_mode(),
                 mode_names: vec![fl!("live-off"), fl!("live-media"), fl!("live-fps"), fl!("live-both")],
-                refresh: 2,
-                refresh_names: vec![
-                    fl!("refresh-track"),
-                    fl!("refresh-every", secs = 15),
-                    fl!("refresh-every", secs = 30),
-                    fl!("refresh-every", secs = 60),
-                ],
                 fps_gauge: false,
                 polling: false,
                 rendering: false,
                 snap: Snapshot::default(),
                 preview: None,
                 sent: None,
+                last: None,
                 setup_error: None,
             },
         }
@@ -157,7 +150,9 @@ impl Page {
         }))
     }
 
-    /// Decide whether the freshly rendered image goes to the keyboard.
+    /// Decide whether the freshly rendered image goes to the keyboard. Media
+    /// cards are only re-sent when the track changes; FPS cards also refresh,
+    /// because the number moves on its own.
     fn live_upload(&mut self, card: &Card, key: Option<TrackKey>, has_fps: bool, ctx: &Ctx) -> Output<Message> {
         let Some(spec) = self.spec else { return Output::None };
         if !ctx.connected || ctx.busy || !ctx.caps.screen_rgb565 {
@@ -169,7 +164,7 @@ impl Page {
             Some((hash, k, f, at)) => {
                 let since = now.duration_since(*at);
                 let changed_track = *k != key || *f != has_fps;
-                let refresh = REFRESH[self.live.refresh].is_some_and(|s| since >= Duration::from_secs(s));
+                let refresh = has_fps && since >= FPS_REFRESH;
                 *hash != card.hash && since >= MIN_UPLOAD_GAP && (changed_track || refresh)
             }
         };
@@ -188,6 +183,10 @@ impl Page {
             return Output::None;
         }
         self.spec = spec;
+        // The old frame was made for another screen; render and send again.
+        self.live.sent = None;
+        self.live.last = None;
+        self.live.preview = None;
         self.prepare()
     }
 
@@ -269,17 +268,25 @@ impl Page {
             Message::LiveMode(i) => {
                 self.live.mode = Mode::ALL[i];
                 self.live.sent = None;
+                self.live.last = None;
                 if self.live.mode == Mode::Off {
                     self.live.preview = None;
                 }
                 return self.update(Message::LiveTick, ctx);
             }
-            Message::LiveRefresh(i) => self.live.refresh = i,
             Message::FpsGauge(v) => {
                 self.live.fps_gauge = v;
                 return self.update(Message::LiveTick, ctx);
             }
             Message::LiveTick => {
+                // Retry an upload that was missed while the worker was busy,
+                // and keep FPS cards fresh. Media waits for the next track.
+                if let Some((card, key, has_fps)) = self.live.last.clone() {
+                    let out = self.live_upload(&card, key, has_fps, ctx);
+                    if !matches!(out, Output::None) {
+                        return out;
+                    }
+                }
                 if self.live.polling || !self.live_active() {
                     return Output::None;
                 }
@@ -300,6 +307,7 @@ impl Page {
                 self.live.rendering = false;
                 let (w, h) = card.rgba.dimensions();
                 self.live.preview = Some(widget::image::Handle::from_rgba(w, h, card.rgba.as_raw().clone()));
+                self.live.last = Some((card.clone(), key.clone(), has_fps));
                 return self.live_upload(&card, key, has_fps, ctx);
             }
             Message::SetupMangoHud => {
@@ -398,11 +406,6 @@ impl Page {
                 widget::settings::item::builder(fl!("live-show"))
                     .description(fl!("live-show-help"))
                     .control(widget::dropdown(&l.mode_names, Mode::ALL.iter().position(|m| *m == l.mode), Message::LiveMode)),
-            )
-            .add(
-                widget::settings::item::builder(fl!("live-refresh"))
-                    .description(fl!("live-refresh-help"))
-                    .control(widget::dropdown(&l.refresh_names, Some(l.refresh), Message::LiveRefresh)),
             );
 
         if l.mode.media() {

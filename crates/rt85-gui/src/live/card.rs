@@ -1,7 +1,8 @@
-//! Draws the "live" screen image: now-playing card (cover art, title, artist,
-//! time bar) and/or game FPS, at the keyboard screen's resolution.
+//! Draws the "live" screen image: now-playing card (cover art and song name on
+//! a background taken from the cover) and/or game FPS, at the keyboard
+//! screen's resolution.
 
-use super::{fps::Reading, mpris::NowPlaying};
+use super::{colors, fps::Reading, mpris::NowPlaying};
 use cosmic_text::{Align, Attrs, Buffer, Color, Ellipsize, EllipsizeHeightLimit, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap};
 use image::{DynamicImage, Rgba, RgbaImage, imageops};
 use std::{
@@ -9,22 +10,21 @@ use std::{
     hash::{Hash, Hasher},
     path::PathBuf,
     sync::{LazyLock, Mutex},
-    time::Duration,
 };
 
 const WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
 const DIM: Rgba<u8> = Rgba([200, 200, 210, 255]);
-const TRACK: Rgba<u8> = Rgba([255, 255, 255, 70]);
 
 static FONTS: LazyLock<Mutex<(FontSystem, SwashCache)>> =
     LazyLock::new(|| Mutex::new((FontSystem::new(), SwashCache::new())));
 
-/// Last cover art, keyed by URL, already blurred for the background.
+/// Last cover art, keyed by URL, with the palette picked from it.
 static ART: Mutex<Option<(String, Option<Art>)>> = Mutex::new(None);
 
 #[derive(Clone)]
 struct Art {
     image: DynamicImage,
+    scheme: colors::Scheme,
 }
 
 #[derive(Debug)]
@@ -45,22 +45,17 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
     match (media, fps) {
         (Some(m), fps) => {
             let art = m.art_url.as_deref().and_then(art);
-            if let Some(a) = &art {
-                // Darkened, blurred cover as the background.
-                let bg = a.image.resize_to_fill(w, h, imageops::FilterType::Triangle).blur(u(10.0)).to_rgba8();
-                for (d, s) in img.pixels_mut().zip(bg.pixels()) {
-                    *d = Rgba([s[0] / 3, s[1] / 3, s[2] / 3, 255]);
-                }
-            }
+            let scheme = art.as_ref().map_or(colors::FALLBACK, |a| a.scheme);
+            gradient(&mut img, scheme.top, scheme.bottom);
 
-            // Cover art plus title/artist/time bar: stacked on squarish
-            // screens (RT100), side by side on wide ones (RT85, 320x172).
+            // Cover art plus title: stacked on squarish screens (RT100), side
+            // by side on wide ones (RT85, 320x172).
             let wide = w as f32 > h as f32 * 1.3;
             let (x0, y0, side) = if wide {
                 let side = (h as f32 - pad * 2.0).max(0.0) as u32;
                 (pad as u32, pad as u32, side)
             } else {
-                let text_h = u(52.0);
+                let text_h = u(30.0);
                 let side = ((h as f32 - text_h - pad * 2.0).min(w as f32 - pad * 2.0)).max(0.0) as u32;
                 ((w - side) / 2, pad as u32, side)
             };
@@ -70,45 +65,25 @@ pub fn render(w: u32, h: u32, media: Option<&NowPlaying>, fps: Option<&Reading>,
                     imageops::overlay(&mut img, &cover, x0 as i64, y0 as i64);
                 }
                 None => {
-                    fill(&mut img, x0 as i32, y0 as i32, side, side, Rgba([40, 42, 48, 255]));
-                    text(fs, cache, &mut img, "♪", x0 as f32, y0 as f32 + side as f32 * 0.25, side as f32, side as f32 * 0.5, true, accent, Align::Center);
+                    fill(&mut img, x0 as i32, y0 as i32, side, side, Rgba([0, 0, 0, 90]));
+                    text(fs, cache, &mut img, "♪", x0 as f32, y0 as f32 + side as f32 * 0.25, side as f32, side as f32 * 0.5, true, DIM, Align::Center);
                 }
-            }
-            if !m.playing {
-                // Pause badge on the cover.
-                let b = u(22.0) as u32;
-                let (bx, by) = (x0 + side - b - u(4.0) as u32, y0 + u(4.0) as u32);
-                fill(&mut img, bx as i32, by as i32, b, b, Rgba([0, 0, 0, 170]));
-                let bar = (b / 5).max(1);
-                fill(&mut img, (bx + b / 2 - bar - bar / 2) as i32, (by + b / 4) as i32, bar, b / 2, WHITE);
-                fill(&mut img, (bx + b / 2 + bar / 2) as i32, (by + b / 4) as i32, bar, b / 2, WHITE);
             }
             if let Some(f) = fps {
                 fps_badge(fs, cache, &mut img, f, x0 as f32 + u(4.0), y0 as f32 + u(4.0), u(1.0), accent);
             }
 
-            // Text block: below the cover, or to its right, vertically centred.
-            let (tx, tw, mut y, align, title_px, artist_px) = if wide {
+            // Song name only: the artist, play state and progress stay off the
+            // card, so the artwork and its colours carry the design.
+            if wide {
                 let tx = (x0 + side) as f32 + pad * 1.5;
-                let block = u(16.0) + u(15.0) + u(5.0) + u(14.0);
-                (tx, w as f32 - tx - pad, (h as f32 - block) / 2.0, Align::Left, u(14.0), u(11.0))
+                let px = u(15.0);
+                let y = (h as f32 - px * 1.2) / 2.0;
+                text(fs, cache, &mut img, &m.title, tx, y, w as f32 - tx - pad, px, true, WHITE, Align::Left);
             } else {
-                (pad, w as f32 - pad * 2.0, y0 as f32 + side as f32 + u(5.0), Align::Center, u(12.0), u(10.0))
-            };
-            text(fs, cache, &mut img, &m.title, tx, y, tw, title_px, true, WHITE, align);
-            y += title_px + u(3.0);
-            if !m.artist.is_empty() {
-                text(fs, cache, &mut img, &m.artist, tx, y, tw, artist_px, false, DIM, align);
-            }
-            y += artist_px + u(5.0) + if wide { u(6.0) } else { 0.0 };
-            if let (Some(len), Some(pos)) = (m.length, m.position) {
-                let frac = (pos.as_secs_f32() / len.as_secs_f32()).clamp(0.0, 1.0);
-                let bar_h = u(3.0) as u32;
-                fill(&mut img, tx as i32, y as i32, tw as u32, bar_h, TRACK);
-                fill(&mut img, tx as i32, y as i32, (tw * frac) as u32, bar_h, accent);
-                y += u(5.0);
-                text(fs, cache, &mut img, &clock(pos), tx, y, tw, u(9.0), false, DIM, Align::Left);
-                text(fs, cache, &mut img, &clock(len), tx, y, tw, u(9.0), false, DIM, Align::Right);
+                let px = u(13.0);
+                let y = y0 as f32 + side as f32 + u(4.0);
+                text(fs, cache, &mut img, &m.title, pad, y, w as f32 - pad * 2.0, px, true, WHITE, Align::Center);
             }
         }
         (None, Some(f)) => {
@@ -136,9 +111,17 @@ fn fps_badge(fs: &mut FontSystem, cache: &mut SwashCache, img: &mut RgbaImage, f
     text(fs, cache, img, &label, x, y + 2.0 * u, bw, 11.0 * u, true, accent, Align::Center);
 }
 
-fn clock(d: Duration) -> String {
-    let s = d.as_secs();
-    if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60) } else { format!("{}:{:02}", s / 60, s % 60) }
+/// Two-stop vertical gradient over the whole card.
+fn gradient(img: &mut RgbaImage, top: [u8; 3], bottom: [u8; 3]) {
+    let height = img.height();
+    for (y, row) in img.rows_mut().enumerate() {
+        let t = if height > 1 { y as f32 / (height - 1) as f32 } else { 0.0 };
+        let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * t).round() as u8;
+        let c = Rgba([mix(top[0], bottom[0]), mix(top[1], bottom[1]), mix(top[2], bottom[2]), 255]);
+        for p in row {
+            *p = c;
+        }
+    }
 }
 
 /// Alpha-blended rectangle.
@@ -198,7 +181,10 @@ fn art(url: &str) -> Option<Art> {
     {
         return a.clone();
     }
-    let loaded = load_art(url).map(|image| Art { image });
+    let loaded = load_art(url).map(|image| {
+        let scheme = colors::scheme(&image);
+        Art { image, scheme }
+    });
     *slot = Some((url.to_owned(), loaded.clone()));
     loaded
 }
@@ -254,8 +240,6 @@ mod tests {
             title: "Lagtrain".into(),
             artist: "inabakumori".into(),
             art_url: std::env::var("RT85_CARD_ART").ok(),
-            length: Some(Duration::from_secs(254)),
-            position: Some(Duration::from_secs(97)),
             playing: true,
         };
         let paused = NowPlaying { playing: false, art_url: None, ..media.clone() };
@@ -263,7 +247,7 @@ mod tests {
         let accent = [99, 208, 223];
         for (name, m, f) in [
             ("media", Some(&media), None),
-            ("paused-noart", Some(&paused), None),
+            ("noart", Some(&paused), None),
             ("both", Some(&media), Some(&fps)),
             ("fps", None, Some(&fps)),
             ("idle", None, None),

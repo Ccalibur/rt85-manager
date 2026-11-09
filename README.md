@@ -32,9 +32,9 @@
 | **Settings** | **Device** |
 | ![Settings page: keyboard layout, colour scheme and frosted glass](docs/screenshots/settings.png) | ![Device page: connected RT85, platform, model and capabilities](docs/screenshots/device.png) |
 
-**Live screen:** what the RT85's 320×172 screen shows for now playing, now playing + FPS, and game FPS.
+**Live screen:** what the RT85's 320×172 screen shows for now playing, now playing + FPS, and game FPS. The now-playing card is just the album art and song name, on a background taken from the cover's colours.
 
-![Three rendered 320×172 screen images: a now-playing card for Lagtrain by inabakumori with cover art on the left and title, artist and time bar on the right; the same with an FPS badge; and a large FPS counter](docs/screenshots/live-screen.png)
+![Three rendered 320×172 screen images: a now-playing card for Lagtrain by inabakumori with cover art on the left, the song name on the right, and a dark background in the cover's colours; the same with an FPS badge; and a large FPS counter](docs/screenshots/live-screen.png)
 
 ## Features
 
@@ -44,7 +44,7 @@
 - **Screen:** upload images and full-screen animated GIFs (fill, fit or stretch); clear the screen on the RT100, or reset the RT85's screen (erases every uploaded picture and brings the clock dashboard back, up to 90 s)
 - **Screen widgets:** sync the clock, switch the RT85's screen language; stream CPU usage and temperature on the RT100
 - **Macros:** key, text and delay steps on any key. A key is remapped to a spare F13–F24 code, and the app types the macro (via `/dev/uinput`) while it is running; the firmware's own macro memory isn't reverse-engineered yet
-- **Live screen:** now-playing media from MPRIS (cover art, title, time bar) and game FPS from MangoHud, drawn onto the screen
+- **Live screen:** now-playing media from MPRIS (album art and song name on a background matching the art) and game FPS from MangoHud, drawn onto the screen. Media cards are only re-sent when the song changes
 - **Layouts:** the RT85's 75% board in US ANSI or UK ISO (asked on first run), with its real key slots; the RT100 board when one is detected. The keyboard is asked which model it is, since several share one USB ID
 - **Desktop integration:** follows the COSMIC theme or the KDE colour scheme, optional frosted glass, window controls on KDE/GNOME
 - **CLI:** everything above, scriptable, plus raw packets for protocol probing (`--layout ansi|iso`)
