@@ -29,6 +29,11 @@ const REPLY_DELAY: Duration = Duration::from_millis(10);
 /// asking for this long before giving up.
 const PREPARE_TIMEOUT: Duration = Duration::from_secs(10);
 const PREPARE_RETRY: Duration = Duration::from_millis(200);
+/// The vendor app waits this long for the flash-erase notification, then
+/// assumes the erase finished and carries on (Hub: `FLASH_ERASE_TIMEOUT_MS`).
+const ERASE_TIMEOUT: Duration = Duration::from_secs(90);
+/// Read/progress step while waiting for it.
+const ERASE_POLL: Duration = Duration::from_secs(1);
 
 pub struct RoyuanKeyboard {
     dev: HidDevice,
@@ -54,7 +59,17 @@ impl RoyuanKeyboard {
         self.send_spaced(report, MIN_GAP)
     }
 
+    /// Send a report. `0xAC` is refused on gen2, where it erases the screen's
+    /// flash; only [`Self::clear_screen`] may put it on the wire (Hard rule 1).
     fn send_spaced(&mut self, report: &Report, gap: Duration) -> Result<()> {
+        if self.family == Family::Gen2 && report.first() == Some(&0xAC) {
+            return Err(Error::Unsupported("0xAC on a gen2 board (it erases the screen's flash)"));
+        }
+        self.send_unchecked(report, gap)
+    }
+
+    /// The one send path, without the `0xAC` guard.
+    fn send_unchecked(&mut self, report: &Report, gap: Duration) -> Result<()> {
         if let Some(t) = self.last_send {
             let elapsed = t.elapsed();
             if elapsed < gap {
@@ -192,11 +207,67 @@ impl RoyuanKeyboard {
         }
     }
 
-    pub fn clear_screen(&mut self) -> Result<()> {
+    /// Remove the screen's picture. On gen2 (RT85) this is the vendor app's
+    /// "Clear Screen": `0xAC` erases the screen's flash, which takes tens of
+    /// seconds. The clock dashboard comes back when it finishes.
+    ///
+    /// Hard rule 1: this is the only path allowed to put `0xAC` on the wire
+    /// for a gen2 board, and only a caller that has asked the user first.
+    pub fn clear_screen(&mut self, progress: Progress) -> Result<()> {
         match self.family {
             Family::Yc500 => self.send(&screen::clear()),
-            // 0xAC erases flash on gen2.
-            Family::Gen2 => Err(Error::Unsupported("clearing the screen")),
+            Family::Gen2 => {
+                // The only place allowed past the transport's 0xAC guard.
+                self.send_unchecked(&screen::clear(), MIN_GAP)?;
+                self.wait_for_erase(progress)
+            }
+        }
+    }
+
+    /// Wait for the `0x2C` erase-done notification (`0xAC` has no direct
+    /// reply). The vendor app listens on every vendor interface and gives up
+    /// at 90 s with a "no feedback verification" warning; do the same, since
+    /// the board may deliver the notification on a sibling interface we don't
+    /// read from this handle.
+    fn wait_for_erase(&mut self, progress: Progress) -> Result<()> {
+        let total = ERASE_TIMEOUT.as_secs() as usize;
+        let started = Instant::now();
+        let mut buf = [0u8; REPORT_LEN + 1];
+        let mut warned = false;
+        let mut shown = usize::MAX;
+        loop {
+            let elapsed = started.elapsed();
+            if elapsed >= ERASE_TIMEOUT {
+                progress(total, total);
+                warn!("no flash-erase notification after {total} s; assuming the keyboard finished");
+                return Ok(());
+            }
+            // One progress tick per second, however chatty the endpoint is.
+            let secs = elapsed.as_secs() as usize;
+            if secs != shown {
+                shown = secs;
+                progress(secs, total);
+            }
+            match self.dev.read_timeout(&mut buf, ERASE_POLL.as_millis() as i32) {
+                Ok(0) => {}
+                Ok(n) => {
+                    trace!(report = %hex(&buf[..n]), "input report while waiting for the flash erase");
+                    if screen::erase_done(&buf[..n]) {
+                        progress(total, total);
+                        return Ok(());
+                    }
+                }
+                Err(e) => {
+                    // A node that can't be read will never deliver the
+                    // notification. Still sit out the erase, so the board is
+                    // not left mid-write when the caller returns.
+                    if !warned {
+                        warned = true;
+                        warn!("can't read the erase notification ({e}); waiting out the erase");
+                    }
+                    std::thread::sleep(ERASE_POLL);
+                }
+            }
         }
     }
 

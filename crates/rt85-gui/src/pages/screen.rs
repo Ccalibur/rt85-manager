@@ -258,7 +258,10 @@ impl Page {
                     return Output::Job(job, fl!("uploading"));
                 }
             }
-            Message::Clear => return Output::Job(Job::ClearScreen, fl!("clearing")),
+            Message::Clear => {
+                let label = if ctx.caps.screen_erase { fl!("resetting-screen") } else { fl!("clearing") };
+                return Output::Job(Job::ClearScreen, label);
+            }
             Message::SyncTime => return Output::Job(Job::SyncTime, fl!("syncing-time")),
             Message::ToggleLanguage => return Output::Job(Job::ToggleLanguage, fl!("switching-language")),
             Message::CpuFeed(v) => self.cpu_feed = v,
@@ -349,8 +352,13 @@ impl Page {
         let mut actions = widget::row::with_capacity(2)
             .push(widget::button::suggested(fl!("upload")).on_press_maybe(can_upload.then_some(Message::Upload)))
             .spacing(space.space_xs);
-        // Not offered on the RT85, where the "clear" command erases flash.
-        if caps.screen_clear || !ctx.connected {
+        // On the RT85 the same byte erases the screen's flash, so it gets its
+        // own confirmed action instead of the RT100's plain clear.
+        if caps.screen_erase {
+            actions = actions.push(
+                widget::button::destructive(fl!("reset-screen")).on_press_maybe((idle && caps.screen_erase).then_some(Message::Clear)),
+            );
+        } else if caps.screen_clear || !ctx.connected {
             actions = actions.push(
                 widget::button::destructive(fl!("clear-screen")).on_press_maybe((idle && caps.screen_clear).then_some(Message::Clear)),
             );

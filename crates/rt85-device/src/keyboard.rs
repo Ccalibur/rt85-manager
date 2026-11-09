@@ -23,7 +23,10 @@ pub struct Capabilities {
     pub screen_rgb565: bool,
     /// Upload pre-encoded QGIF files.
     pub screen_qgif: bool,
+    /// Clear the uploaded image (yc500).
     pub screen_clear: bool,
+    /// Erase the screen's pictures (gen2 `0xAC`, the vendor "Clear Screen").
+    pub screen_erase: bool,
     /// Size of the uploadable image area, when known.
     pub screen: Option<ScreenSpec>,
     /// Royuan command set (decides the lighting effects on offer).
@@ -49,6 +52,7 @@ impl Capabilities {
                     screen_rgb565: true,
                     screen_qgif: false,
                     screen_clear: !gen2,
+                    screen_erase: gen2,
                     screen: Some(screen::spec_for(board)),
                     family: Some(board.family()),
                     screen_language: gen2,
@@ -146,8 +150,8 @@ impl Keyboard {
         }
     }
 
-    pub fn clear_screen(&mut self) -> Result<()> {
-        self.royuan("clearing the screen")?.clear_screen()
+    pub fn clear_screen(&mut self, progress: Progress) -> Result<()> {
+        self.royuan("clearing the screen")?.clear_screen(progress)
     }
 
     pub fn set_time(&mut self, api: &mut HidApi, t: DateTime) -> Result<()> {

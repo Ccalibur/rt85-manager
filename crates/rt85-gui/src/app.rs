@@ -66,6 +66,9 @@ pub enum Message {
     Scanned(Result<ScanResult, String>),
     Progress(usize, usize),
     JobDone(Result<String, String>),
+    /// Confirmation for the RT85's flash-erase "Reset screen".
+    ResetConfirmed,
+    ResetCancelled,
     HotplugTick,
     TakeScreenshot,
     Screenshot(u32, u32, Arc<Vec<u8>>),
@@ -98,6 +101,8 @@ pub struct App {
     prefs: Prefs,
     /// Pending answer in the "which layout?" dialog.
     layout_choice: Option<Physical>,
+    /// The destructive "Reset screen" confirmation is on screen.
+    confirm_reset: bool,
     kde: Option<KdeScheme>,
     kde_mtime: Option<std::time::SystemTime>,
     theme_source: Source,
@@ -313,6 +318,7 @@ impl Application for App {
             builtin_window_controls: flags.builtin_window_controls,
             prefs,
             layout_choice: None,
+            confirm_reset: false,
             kde,
             kde_mtime: appearance::kdeglobals_mtime(),
             theme_source: Source::Builtin,
@@ -340,8 +346,19 @@ impl Application for App {
         (app, Task::batch(tasks))
     }
 
-    /// Asks for the keyboard's layout until it has been answered once.
+    /// Asks for the keyboard's layout until it has been answered once, and
+    /// confirms the RT85's flash-erasing screen reset.
     fn dialog(&self) -> Option<Element<'_, Message>> {
+        if self.confirm_reset {
+            return Some(
+                widget::dialog()
+                    .title(fl!("reset-screen-title"))
+                    .body(fl!("reset-screen-body"))
+                    .primary_action(widget::button::destructive(fl!("reset-screen-confirm")).on_press(Message::ResetConfirmed))
+                    .secondary_action(widget::button::standard(fl!("cancel")).on_press(Message::ResetCancelled))
+                    .into(),
+            );
+        }
         if self.prefs.keyboard_layout.is_some() {
             return None;
         }
@@ -442,10 +459,22 @@ impl Application for App {
                 let out = self.keys.update(m);
                 return self.handle(out, Message::Keys);
             }
+            // The RT85's clear is a flash erase: confirm it first. yc500
+            // boards keep the immediate clear.
+            Message::Screen(pages::screen::Message::Clear) if caps.screen_erase => {
+                self.confirm_reset = true;
+                return Task::none();
+            }
             Message::Screen(m) => {
                 let out = self.screen.update(m, &ctx);
                 return self.handle(out, Message::Screen);
             }
+            Message::ResetConfirmed => {
+                self.confirm_reset = false;
+                let out = self.screen.update(pages::screen::Message::Clear, &ctx);
+                return self.handle(out, Message::Screen);
+            }
+            Message::ResetCancelled => self.confirm_reset = false,
             Message::Device(pages::device::Message::Select(i)) => {
                 // The worker picks this up on its next job or scan; locking it
                 // here could freeze the UI behind a long upload or the polkit prompt.
@@ -526,6 +555,10 @@ impl Application for App {
                     Err(e) => self.scan_error = Some(e),
                 }
                 self.sync_board();
+                // Close a pending reset dialog if that keyboard went away.
+                if self.confirm_reset && !self.caps().screen_erase {
+                    self.confirm_reset = false;
+                }
                 let out = self.screen.on_caps_changed(self.caps().screen);
                 return self.handle(out, Message::Screen);
             }

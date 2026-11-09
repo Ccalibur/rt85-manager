@@ -13,8 +13,12 @@ which the code supports as well.
 | RDMCTMZT | `0x36B0` (+ LCD `1919:1919`) | RT82, Womier SK80 | [guysoft/rt82display](https://github.com/guysoft/rt82display) |
 
 The gen2 layouts come from those projects' analyses of Epomaker's 3.2.22
-driver; only the screen upload has been seen on a real RT85 (keybored's USB
-capture). Nothing here has been tested by this project on an RT85 yet.
+driver; only the screen upload had been seen on a real RT85 (keybored's USB
+capture) before this project got one. Since 9 Nov 2026 the gen2 command set
+has been exercised on a real RT85: identify, lighting, remap, per-key colours,
+image and GIF upload, clock/live widgets, screen language and the `0xAC`
+screen erase all worked. Treat the protocol as experimental all the same:
+firmware revisions and sibling boards can differ.
 
 ## Royuan (`0x3151`)
 
@@ -34,7 +38,7 @@ Reports are spaced ≥ 1 ms apart.
 | `2a` | Temperature widget | `2a 00.. d5 °C` |
 | `a5` | Image/animation prepare | see below |
 | `25` | Image data | see below |
-| `ac` | Clear image (**yc500 only**; erases flash on gen2) | `ac 00.. 53` |
+| `ac` | Clear uploaded image (yc500); flash erase on gen2 (see below) | `ac 00.. 53`; gen2 done is `2c` on input report 5 |
 | `8f` | Identify (both families) | reply: `8f idLE32 .. .. fwLE16 boot`, e.g. id 2895 = RT85, 1379 = RT100 |
 | `f7` | Poll; reply via feature GET | |
 | `fe 40`, … | 2.4 GHz wake-up | fixed sequence, reply contains `01 01 01 68` once awake |
@@ -86,7 +90,28 @@ analyses:
 | `08` | Side lighting | like `07`, speed sent directly |
 | `11` / `91` | Sleep timers | four u16 LE seconds at 8..16 |
 | `27` | Screen language | `27 01` flips it |
-| `ac` | Flash erase | **never sent** |
+| `ac` | Erase the screen's pictures (flash erase) | `ac 00 00 00 00 00 00 53`; done is `2c` on input report 5 |
+| `ad` | OLED version (read; vendor enum only) | not implemented |
+
+### Clearing the screen (`0xAC`)
+
+This is the vendor web app's **Clear Screen** button
+(`hub.epomaker.com/oled`, `index-CfrPqY6w.js`): `GET_FLASHCHIPERASE = 172 =
+0xAC`, sent as `ac 00 00 00 00 00 00 53`. There is no picture readback and no
+"show the clock" command: the clock dashboard is the firmware's *empty* state,
+so the only way back from an upload is this erase. It removes every bank
+(`oledLayerCount: 5` for the RT85).
+
+The board confirms with `SET_FLASHCHIPERASE = 44 = 0x2C` as the first data
+byte of **input report ID 5**; the vendor app listens on every vendor
+interface for it. The vendor timeout is `FLASH_ERASE_TIMEOUT_MS = 90_000`,
+and it assumes success at that deadline because the erase has no feedback
+verification of its own. A capture by sharkfin put the erase at about 55 s.
+
+`rt85 clear --erase-flash` and the GUI's confirmed **Reset screen** action are
+the only paths allowed to send `0xAC` to gen2 (Hard rule 1); `rt85 raw` still
+refuses it. They send it, wait on the same handle for report 5 / `0x2C`, and
+fall back to the vendor's "assume done" at 90 s with a warning.
 
 Key actions are 4 bytes: `00 mods usage 00` for a key, `03 00 usageLE16` for
 media keys, `09 mode slot 00` for a macro. Slots are matrix positions, not
@@ -115,8 +140,9 @@ The screen takes **QGIF** (240 × 135). The real encoder is the vendor's WASM
 uploads pre-encoded `.qgif` files on this platform.
 
 ## Open questions for the RT85
-- Everything gen2 except the screen still needs checking on a real board:
-  identify reply, lighting, remap (`0a`), per-key colours (`0c`).
 - Does the keyboard acknowledge the screen prepare (`a5 01`)? If it doesn't,
   the app logs a warning and sends anyway.
+- The screen reset works on a real RT85 through both `rt85 clear --erase-flash`
+  and the GUI. Whether it finishes on the `0x2C` notification or on the 90 s
+  assume-done fallback was not measured; the app accepts either.
 - Which physical key is slot 84 (PrtSc in the default map, drawn beside Up)?

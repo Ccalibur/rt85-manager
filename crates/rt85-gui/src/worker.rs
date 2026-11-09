@@ -66,7 +66,7 @@ impl Job {
             }
             Job::Upload(a) => format!("upload {} frame(s)", a.frames.len()),
             Job::Qgif(_) => "upload QGIF".into(),
-            Job::ClearScreen => "clear the screen".into(),
+            Job::ClearScreen => "reset the screen".into(),
             Job::SyncTime => "sync the clock".into(),
             Job::Cpu(v) => format!("show CPU {v}%"),
             Job::Temperature(v) => format!("show {v} °C"),
@@ -232,7 +232,7 @@ impl Worker {
                 "QGIF uploaded".into()
             }
             Job::ClearScreen => {
-                kb.clear_screen()?;
+                kb.clear_screen(progress)?;
                 "Screen cleared".into()
             }
             Job::SyncTime => {

@@ -1,6 +1,8 @@
 //! Screen: RGB565 image/animation upload (`0xA5`/`0x25`), clock (`0x28`),
-//! and, on yc500 boards only, clear (`0xAC`) and the CPU/temperature widgets
-//! (`0x22`/`0x2A`). On gen2 boards (RT85) `0xAC` erases flash instead.
+//! clear (`0xAC`) and, on yc500 boards only, the CPU/temperature widgets
+//! (`0x22`/`0x2A`). On gen2 boards (RT85) `0xAC` erases the screen's flash
+//! and the board confirms with `0x2C`; it must only be sent from the guarded
+//! `royuan::clear_screen` path.
 
 use super::{PAYLOAD_LEN, framed, raw};
 use crate::{ProtocolError, Report, checksum::ones_complement_sum, rgb565, time::DateTime};
@@ -140,9 +142,20 @@ pub fn prepare_accepted(reply: &[u8]) -> Option<bool> {
     (reply.len() > 1 && reply[0] == 0xA5).then(|| reply[1] == 1)
 }
 
-/// Wipe the uploaded image (yc500 only; telemetry widgets are unaffected).
+/// Remove the uploaded image. On yc500 boards this clears the picture; on
+/// gen2 boards (RT85) it erases the screen's flash, which is the vendor
+/// app's "Clear Screen" and brings the clock dashboard back. The erase takes
+/// tens of seconds and finishes with [`erase_done`].
 pub fn clear() -> Report {
     framed([0xAC, 0, 0, 0, 0, 0, 0], &[])
+}
+
+/// Did the keyboard finish the flash erase? The notification is input report
+/// ID 5 with `0x2C` as its first data byte (the vendor app's
+/// `SET_FLASHCHIPERASE`). Linux keeps the report ID at `[0]` for numbered
+/// reports; accept the bare byte too, in case a node delivers them unnumbered.
+pub fn erase_done(report: &[u8]) -> bool {
+    matches!(report, [0x05, 0x2C, ..] | [0x2C, ..])
 }
 
 pub fn set_time(t: DateTime) -> Report {
@@ -175,6 +188,20 @@ mod tests {
         assert!(hex(&set_cpu(50)).starts_with("22000000000000dd63007f000400080032"));
         let t = DateTime { year: 2026, month: 11, day: 2, hour: 21, minute: 43, second: 7, weekday: 0 };
         assert!(hex(&set_time(t)).starts_with("28000000000000d707ea0b02152b07"));
+    }
+
+    #[test]
+    fn erase_completion_notification() {
+        // Vendor app: input report ID 5, first data byte SET_FLASHCHIPERASE.
+        assert!(erase_done(&[0x05, 0x2C]));
+        assert!(erase_done(&[0x05, 0x2C, 0, 0]));
+        // An unnumbered node may deliver the same byte without the prefix.
+        assert!(erase_done(&[0x2C]));
+        // Unrelated reports from the same endpoint.
+        assert!(!erase_done(&[]));
+        assert!(!erase_done(&[0x05]));
+        assert!(!erase_done(&[0x05, 0x0F, 0x01]));
+        assert!(!erase_done(&[0x25, 0, 1, 0]));
     }
 
     #[test]

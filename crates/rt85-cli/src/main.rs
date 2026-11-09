@@ -9,6 +9,7 @@ use rt85_protocol::{
     layout::{Board, Layout, Physical},
     rdmctmzt::Qgif,
     royuan::{
+        Family,
         keys::RgbFrame,
         lighting::{self, MAX_BRIGHTNESS, Profile},
     },
@@ -101,8 +102,14 @@ enum Cmd {
     },
     /// Upload a pre-encoded QGIF file (RDMCTMZT boards).
     Qgif { file: PathBuf },
-    /// Clear the uploaded image (RT100 only; refused on the RT85, where the command erases flash).
-    Clear,
+    /// Clear the uploaded image. On the RT85 this erases the screen's flash
+    /// (every uploaded picture, up to 90 s), so it needs --erase-flash.
+    Clear {
+        /// Allow the flash erase on the RT85. Deletes every uploaded picture
+        /// and can take up to 90 seconds; don't unplug the keyboard.
+        #[arg(long)]
+        erase_flash: bool,
+    },
     /// Switch the screen's language (RT85; each use flips it).
     Language,
     /// Show a number on the CPU widget.
@@ -256,7 +263,22 @@ fn main() -> Result<()> {
             kb.upload_qgif(&mut api, &q, rt85_device::local_now(), &mut progress_bar)?;
             eprintln!();
         }
-        Cmd::Clear => kb.clear_screen()?,
+        Cmd::Clear { erase_flash } => {
+            let gen2 = board.family() == Family::Gen2;
+            if gen2 && !erase_flash {
+                bail!(
+                    "refusing to clear: on the RT85 this erases the screen's flash (every uploaded picture) \
+                     and takes up to 90 s. Re-run with --erase-flash if you mean it."
+                );
+            }
+            if gen2 {
+                eprintln!("Erasing every uploaded picture (up to 90 s); don't unplug the keyboard.");
+            }
+            kb.clear_screen(&mut progress_bar)?;
+            if gen2 {
+                eprintln!();
+            }
+        }
         Cmd::Language => kb.toggle_language()?,
         Cmd::Cpu { percent } => kb.set_cpu(percent)?,
         Cmd::Temp { celsius } => kb.set_temperature(celsius)?,
