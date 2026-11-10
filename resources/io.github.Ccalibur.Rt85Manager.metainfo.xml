@@ -70,6 +70,19 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.6.0" date="2026-11-10">
+      <description>
+        <p>A live now-playing card built around the album art.</p>
+        <ul>
+          <li>Shows the cover, song name and a smaller artist/album line on a gradient taken from the cover's dominant colours</li>
+          <li>Adapts to the RT85's wide screen and the RT100's squarer one</li>
+          <li>Media cards are only re-sent when the track changes; pausing or resuming no longer uploads the image again</li>
+          <li>FPS cards still refresh every 30 s, and a track change missed while the keyboard is busy is retried on the next tick</li>
+          <li>MPRIS now reads the album and prefers the player that provides artwork</li>
+          <li>Removed the manual refresh setting, progress bar and pause badge</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-11-09">
       <description>
         <p>Reset the RT85's screen, now verified on real hardware.</p>

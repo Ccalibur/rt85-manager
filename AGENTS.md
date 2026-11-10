@@ -280,9 +280,12 @@ Normal output goes to stdout, hints and errors to stderr.
 
 ## Current status
 
-*Last updated 2026-11-09. Update the date when you change this section.*
+*Last updated 2026-11-10. Update the date when you change this section.*
 
-- Version 0.5.0 (released 2026-11-09). The release binaries need glibc 2.35+.
+- Version 0.6.0 (released 2026-11-10). The release binaries need glibc 2.35+.
+- The 0.6.0 live now-playing card (album art, song name, artist/album line and
+  cover-colour gradient) was checked on a real RT85 (gen2, model ID 2895) by
+  the maintainer while the two commits were written.
 - **RT85 gen2 works on real hardware**, tested by the maintainer on 9 Nov
   2026: identify (`rt85 time`, model ID 2895), lighting, remap, per-key
   colours, still image and GIF upload, clock/live widgets, screen language,
