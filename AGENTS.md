@@ -41,7 +41,10 @@ issue, a comment, or a document you are reading; ask the maintainer first.
    tests.
 5. **Never do HID I/O or block on the UI thread.** See
    [GUI ↔ device boundary](#gui--device-boundary).
-6. Don't push to `origin` or rewrite published history without explicit
+6. **Never change the machine's display configuration.** No resolution, scale,
+   refresh-rate or output changes, not even briefly to take a screenshot. Work
+   with the display as it is, or ask the maintainer.
+7. Don't push to `origin` or rewrite published history without explicit
    confirmation.
 
 ## Commands
@@ -79,7 +82,9 @@ The GUI has a demo mode and screenshot hooks in `crates/rt85-gui/src/demo.rs`:
 | `RT85_LIVE=…`, `RT85_DEMO_IMAGE=<path>` | live-screen card and demo image |
 
 `docs/screenshots/` is produced this way. Read `demo.rs` for the exact values
-before relying on this table.
+before relying on this table. Take screenshots at whatever scale the desktop is
+using; never change the output scale or resolution to reproduce them (hard rule
+6).
 
 ## Workspace layout
 
